@@ -51,7 +51,7 @@ public:
     }
     processes_[a.pid.idx()] = std::make_unique<RunningProcess>(
         a.pid, std::move(p), std::move(res), this);
-    safeResume(a.pid);
+    queueResume(a.pid, 0);
     return a.pid;
   }
 
@@ -70,12 +70,11 @@ public:
 
 private:
   friend class Process;
-  void safeResume(Pid p);
-  void doSafeResume(Pid p);
-  void send(SendAddress a, MessageBase m);
-  void doSend(SendAddress a, MessageBase m);
+  void queueResume(Pid p, uint64_t expected_resumes);
+  void queueSend(SendAddress a, MessageBase m);
 
   Pid nextPid();
+
   struct RunningProcess : public folly::HHWheelTimer::Callback {
     RunningProcess(Pid pid, std::unique_ptr<Process> proc, ProcessTask t,
                    Context* parent);
@@ -89,11 +88,13 @@ private:
     std::unique_ptr<Process> process;
     ProcessTask task;
     Context* parent;
+    uint64_t resumes = 0;
   };
+
   struct ToProcessItem {
     explicit ToProcessItem(Pid p) : pid(p) {}
     Pid pid;
-    bool resume = false;
+    std::optional<uint64_t> resume;
     std::optional<std::pair<SendAddress, MessageBase>> message;
   };
 

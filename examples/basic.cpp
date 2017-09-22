@@ -28,12 +28,11 @@ public:
     LOG(INFO) << "Got " << res;
 
     auto pid = spawn<ThrowingApp>();
-    co_await send<std::string>(
-        c_->makeSendAddress(pid, &s::ThrowingApp::message), "hello there");
+    co_await send<std::string>(pid, &s::ThrowingApp::message, "hello there");
 
     pid = spawnLink<ThrowingApp>();
     co_await send<std::string>(
-        c_->makeSendAddress(pid, &s::ThrowingApp::message),
+        pid, &s::ThrowingApp::message,
         "hello there LINKED!");
 
     // nothing will send to this, so we essentially block until our linked app

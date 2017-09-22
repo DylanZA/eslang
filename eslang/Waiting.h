@@ -20,9 +20,7 @@ struct WaitingMaybe : IWaiting {
   bool wait;
   explicit WaitingMaybe(bool wait) : wait(wait) {}
   bool await_ready() noexcept { return !wait; }
-
   void await_resume() {}
-
   bool isReadyForResume() const { return true; }
 };
 
@@ -102,11 +100,7 @@ template <class... TTypes> struct WaitingMessages : IWaiting {
     using TM = std::tuple_element<I, std::tuple<TTypes...>>::type;
     std::optional<TM> ret;
     if (!std::get<I>(messages)->empty()) {
-      auto* q = std::get<I>(messages);
-      auto it = q->begin();
-      Message<TM>& msg = *it;
-      ret.emplace(static_cast<TM&&>(msg.val()));
-      q->pop_front();
+      ret.emplace(static_cast<TM&&>(std::get<I>(messages)->pop().val()));
     }
     return ret;
   }

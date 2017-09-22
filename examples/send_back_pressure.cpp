@@ -31,7 +31,7 @@ public:
     for (int i = 0; i < 1000; ++i) {
       int const k = 100 * 1024 * 1024;
       LOG(INFO) << "Send " << i << " with " << k << " bytes";
-      co_await send(c_->makeSendAddress(l, &Listener::r), std::string(k, '?'));
+      co_await send(l, &Listener::r, std::string(k, '?'));
     }
   }
 };

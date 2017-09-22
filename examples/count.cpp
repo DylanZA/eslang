@@ -26,7 +26,7 @@ public:
     if (our_value < kMax) {
       // spawn a counter that will send back to us
       auto pid = spawn<Counter>(kMax, this->pid());
-      send<int>(c_->makeSendAddress(pid, &s::Counter::from_parent_process),
+      send<int>(pid, &s::Counter::from_parent_process,
                 our_value);
       auto subprocess_result = co_await recv(from_sub_process);
       if (our_value + 1 != subprocess_result) {
@@ -37,7 +37,7 @@ public:
     }
     if (target) {
       // send back upstream
-      send<int>(c_->makeSendAddress(*target, &s::Counter::from_sub_process),
+      send<int>(*target, &s::Counter::from_sub_process,
                 our_value);
     }
   }

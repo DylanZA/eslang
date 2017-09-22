@@ -14,7 +14,44 @@ namespace s {
 class Process;
 
 // todo: use a small_vector or something
-template <class T> using MessageQueue = std::deque<Message<T>>;
+template <class T>
+class MessageQueue {
+public:
+  MessageQueue() = default;
+  MessageQueue(MessageQueue const&) = delete;
+  MessageQueue(MessageQueue&&) = delete;
+  MessageQueue& operator=(MessageQueue const&) = delete;
+  MessageQueue& operator=(MessageQueue&&) = delete;
+  size_t size() const {
+    if (stackStorage) {
+      return 1 + others.size();
+    }
+    return 0;
+  }
+  bool empty() const { return size() == 0; }
+  void push(Message<T> t) {
+    if (stackStorage) {
+      others.push_back(std::move(t));
+    }
+    else {
+      stackStorage = std::move(t);
+    }
+  }
+
+  Message<T> pop() {
+    Message<T> ret = std::move(*stackStorage);
+    if (others.size()) {
+      ret = std::move(others.front());
+      others.pop_front();
+    }
+    return ret;
+  }
+
+  // a guess that optimising for single queue length is a good idea.
+  // maybe terrible in practive. who can say!
+  std::optional<Message<T>> stackStorage;
+  std::deque<Message<T>> others;
+};
 
 class SlotBase {
 public:
@@ -54,7 +91,7 @@ public:
 
   void push(MessageBase message) override {
     Message<T>* m = static_cast<Message<T>*>(&message);
-    messages_.push_back(std::move(*m));
+    messages_.push(std::move(*m));
   }
 
 private:

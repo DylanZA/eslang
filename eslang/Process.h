@@ -28,8 +28,6 @@ public:
   virtual ~Process() = default;
   void* getSlotId(SlotBase* slot) { return slot; }
 
-  void slotDestroyed(SlotBase* slot) { slots_.erase(slot); }
-
   void push(SlotId slot, MessageBase m) {
     static_cast<SlotBase*>(slot)->push(std::move(m));
   }
@@ -38,9 +36,9 @@ public:
 
   TimePoint now() const;
 
-  void addLink(Pid b) { links_.insert(b); }
+  void addLink(Pid b) { links_.push_back(b); }
 
-  std::unordered_set<Pid> const& links() const { return links_; }
+  std::vector<Pid> const& links() const { return links_; }
 
   template <class T, class... Args> Pid spawn(Args... args) {
     return c_->spawn<T>(std::forward<Args>(args)...);
@@ -54,8 +52,13 @@ public:
 
   template <class T, class... Args>
   WaitingMaybe send(TSendAddress<T> p, Args&&... params) {
-    c_->send(p, Message<T>(std::forward<Args>(params)...));
+    c_->queueSend(p, Message<T>(std::forward<Args>(params)...));
     return WaitingMaybe(c_->waitOnQueue());
+  }
+
+  template <class T, class Y, class... Args>
+  WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params) {
+    return send(c_->makeSendAddress(pid, slot), std::forward<Args>(params)...);
   }
 
   Context* c() { return c_; }
@@ -90,7 +93,6 @@ protected:
   Pid pid_;
 
 private:
-  std::unordered_set<Pid> links_;
-  std::unordered_set<SlotId> slots_;
+  std::vector<Pid> links_;
 };
 }
