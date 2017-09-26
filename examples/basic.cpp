@@ -63,12 +63,60 @@ public:
     co_return;
   }
 };
+
+class SpawnedApp : public Process {
+public:
+  int i_;
+  SpawnedApp(ProcessArgs a, int i)
+    : Process(std::move(a)), i_(i) {}
+  ProcessTask run() {
+    LOG(INFO) << "Run " << i_;
+    co_return;
+  }
+};
+
+class BlockForEver: public Process {
+public:
+  using Process::Process;
+  ~BlockForEver() {
+    LOG(INFO) << "Cleanly destroy";
+  }
+  ProcessTask run() {
+    Slot<int> s(this);
+    recv(s);
+    co_return;
+  }
+};
+
+class NotifyApp : public Process {
+public:
+  using Process::Process;
+  ProcessTask run() {
+    for (int i = 0; i < 5; ++i) {
+      LOG(INFO) << "Spawn " << i;
+      Slot<Pid> s(this);
+      spawnLinkNotify<SpawnedApp>(s.address(), i);
+      auto w = co_await recv(s);
+      LOG(INFO) << i << " done";
+    }
+    Slot<Pid> s(this);
+    spawnLinkNotify<BlockForEver>(s.address());
+    LOG(INFO) << "Done spawning";
+  }
+};
+
 }
 
 int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   FLAGS_v = 2;
   folly::init(&argc, &argv);
+  {
+    LOG(INFO) << "Notify app";
+    s::Context c;
+    c.spawn<s::NotifyApp>();
+    c.run();
+  }
   {
     LOG(INFO) << "Echo app (with throwing)";
     s::Context c;

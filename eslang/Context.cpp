@@ -105,11 +105,17 @@ Context::findProc(Pid p) {
 }
 
 void Context::destroy(std::unique_ptr<RunningProcess> p, std::string reason) {
+  auto const pid = p->pid;
   if (reason.size()) {
-    LOG(INFO) << "Kill " << p->pid << " for " << reason;
+    LOG(INFO) << "Kill " << pid << " for " << reason;
   }
-  for (auto to_destroy : p->process->links()) {
+
+  for (auto to_destroy : p->process->killOnDie()) {
     addtoDestroy(to_destroy, reason);
+  }
+  
+  for (auto to_notify : p->process->notifyOnDie()) {
+    queueSend(to_notify, Message<Pid>(pid));
   }
 }
 

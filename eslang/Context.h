@@ -40,26 +40,20 @@ public:
 
   template <class T, class... Args> Pid spawn(Args... args) {
     ProcessArgs a(nextPid());
-    a.c = this;
-    auto p = std::make_unique<T>(a, std::forward<Args>(args)...);
-    auto res = p->run();
-    if (res.waiting()) {
-      ESLANGEXCEPT("Expected waiting to be null");
-    }
-    if (res.done()) {
-      ESLANGEXCEPT("Expected done to be false");
-    }
-    processes_[a.pid.idx()] = std::make_unique<RunningProcess>(
-        a.pid, std::move(p), std::move(res), this);
-    queueResume(a.pid, 0);
-    return a.pid;
+    return spawnArgs<T, Args...>(std::move(a), std::forward<Args>(args)...);
+  }
+  
+  template <class T, class Fn, class... Args> Pid spawnWith(Fn f, Args... args) {
+    ProcessArgs a(nextPid());
+    f(a);
+    return spawnArgs<T, Args...>(std::move(a), std::forward<Args>(args)...);
   }
 
   void link(Process* running, Pid b) {
     auto procb = findProc(b);
     if (procb != processes_.end()) {
-      running->addLink(b);
-      (*procb)->process->addLink(running->pid());
+      running->addKillOnDie(b);
+      (*procb)->process->addKillOnDie(running->pid());
     } else {
       ESLANGEXCEPT("Proc is already dead");
     }
@@ -74,6 +68,22 @@ private:
   void queueSend(SendAddress a, MessageBase m);
 
   Pid nextPid();
+
+  template <class T, class... Args> Pid spawnArgs(ProcessArgs a, Args... args) {
+    a.c = this;
+    auto p = std::make_unique<T>(a, std::forward<Args>(args)...);
+    auto res = p->run();
+    if (res.waiting()) {
+      ESLANGEXCEPT("Expected waiting to be null");
+    }
+    if (res.done()) {
+      ESLANGEXCEPT("Expected done to be false");
+    }
+    processes_[a.pid.idx()] = std::make_unique<RunningProcess>(
+      a.pid, std::move(p), std::move(res), this);
+    queueResume(a.pid, 0);
+    return a.pid;
+  }
 
   struct RunningProcess : public folly::HHWheelTimer::Callback {
     RunningProcess(Pid pid, std::unique_ptr<Process> proc, ProcessTask t,

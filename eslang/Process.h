@@ -19,11 +19,20 @@ struct ProcessArgs {
   explicit ProcessArgs(Pid p) : pid(p) {}
   Context* c = nullptr;
   Pid pid;
+  std::optional<TSendAddress<Pid>> notifyOnDead;
+  std::optional<Pid> killOnDie;
 };
 
 class Process {
 public:
-  Process(ProcessArgs args) : c_(args.c), pid_(args.pid) {}
+  Process(ProcessArgs args) : c_(args.c), pid_(args.pid) {
+    if (args.killOnDie) {
+      addKillOnDie(*args.killOnDie);
+    }
+    if (args.notifyOnDead) {
+      notifyOnDie_.push_back(std::move(*args.notifyOnDead));
+    }
+  }
 
   virtual ~Process() = default;
   void* getSlotId(SlotBase* slot) { return slot; }
@@ -36,18 +45,31 @@ public:
 
   TimePoint now() const;
 
-  void addLink(Pid b) { links_.push_back(b); }
-
-  std::vector<Pid> const& links() const { return links_; }
+  void addKillOnDie(Pid b) { killOnDie_.push_back(b); }
+  std::vector<Pid> const& killOnDie() const { return killOnDie_; }
+  std::vector<TSendAddress<Pid>> const& notifyOnDie() const { return notifyOnDie_; }
 
   template <class T, class... Args> Pid spawn(Args... args) {
     return c_->spawn<T>(std::forward<Args>(args)...);
   }
 
   template <class T, class... Args> Pid spawnLink(Args... args) {
-    auto pid = spawn<T>(std::forward<Args>(args)...);
-    c_->link(this, pid);
-    return pid;
+    auto new_pid = c_->spawnWith<T>([p = this->pid_](ProcessArgs& a) {
+      a.killOnDie = p;
+    }, std::forward<Args>(args)...);
+    addKillOnDie(new_pid);
+    return new_pid;
+  }
+
+  // spawn a process, link it to us (if we die), but notify us if they die
+  template <class T, class... Args> Pid spawnLinkNotify(
+    TSendAddress<Pid> send_address,
+    Args... args) {
+    auto new_pid = c_->spawnWith<T>([s = std::move(send_address)](ProcessArgs& a) {
+      a.notifyOnDead = s;
+    }, std::forward<Args>(args)...);
+    addKillOnDie(new_pid);
+    return new_pid;
   }
 
   template <class T, class... Args>
@@ -93,6 +115,7 @@ protected:
   Pid pid_;
 
 private:
-  std::vector<Pid> links_;
+  std::vector<Pid> killOnDie_;
+  std::vector<TSendAddress<Pid>> notifyOnDie_;
 };
 }
