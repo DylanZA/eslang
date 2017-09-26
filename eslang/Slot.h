@@ -40,8 +40,10 @@ public:
 
   Message<T> pop() {
     Message<T> ret = std::move(*stackStorage);
-    if (others.size()) {
-      ret = std::move(others.front());
+    if (others.empty()) {
+      stackStorage.reset();
+    } else {
+      stackStorage = std::move(others.front());
       others.pop_front();
     }
     return ret;
