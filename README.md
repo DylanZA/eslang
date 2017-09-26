@@ -25,7 +25,8 @@ I have some ideas for making it more multithreaded, but right now it only runs i
 
 ### Dependencies
 
-The dependencies right now are just Facebook's [Folly](https://github.com/facebook/folly) library. This is unfortunately a bit of a nightmare to build (mostly I suspect on Windows which is what I am working with).
+The dependencies right now are Facebook's [Folly](https://github.com/facebook/folly) library and [Boost Beast](https://github.com/boostorg/beast) . 
+Folly is unfortunately a bit complicated to build (mostly I suspect on Windows which is what I am working with).
 
 This has some other dependencies such as
 * GLog
@@ -36,21 +37,16 @@ This has some other dependencies such as
 
 ### Building on Windows
 
-This is an aboslute nightmare. I spent almost as much time on this as on writing code. For now this might work for you:
-* Install Visual Studio 2017
-* Install OpenSSL for Windows
-* Download and extract Boost (eg. https://sourceforge.net/projects/boost/files/boost-binaries/)
+This used to be an aboslute nightmare, but then I learnt about [vcpkg](https://github.com/Microsoft/vcpkg).
 
-* clone https://github.com/DylanZA/windowsExtHelp.git
-* run ./clone.sh
-* run ./build.sh \<path to boost checkout\>
-* copy the extinstalls directory to the eslang root directory
-* Run ./build.sh \<path to boost checkout\> In the eslang root directory
-* you should now have two visual studio solutions: build/Debug/Eslang.sln and build/Release/Eslang.sln. These should both build the Debug and Release builds respectively.
+* install vcpkg somewhere
+* install (I think) folly and beast vcpkg things
+* Folly is broken sometimes on windows. I tend to keep my branch working, so if it does not compile you can use [it here: ](https://github.com/dylanza/folly) by overwriting the [appropriate file in vcpkg](https://github.com/Microsoft/vcpkg/tree/master/ports/folly).
+* build as per vcpkg instructions
 
 ### Building on Linux
 
-No idea. Never tried it, but hopefully cmake just works? It can;t be worse than building on Windows.
+No idea. Never tried it, but hopefully cmake just works? It cannot be worse than building on Windows.
 
 ### Is this stable? Is the API stable?
 No.

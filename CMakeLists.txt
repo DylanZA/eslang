@@ -32,6 +32,7 @@ find_package(OpenSSL MODULE REQUIRED)
 
 find_package(Boost COMPONENTS context system filesystem chrono thread iostreams date_time REQUIRED)
 
+FIND_PATH(BEAST_INCLUDE_DIR beast.hpp)
 
 set(ESLANG_BASE_LIBS
 	${LIBGLOG_LIBRARY}
@@ -52,11 +53,13 @@ include_directories(${OPENSSL_INCLUDE_DIR})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${FOLLY_INCLUDE_DIR})
 include_directories(${LIBGLOG_INCLUDE_DIR})
+include_directories(${BEAST_INCLUDE_DIR})
 
 add_subdirectory(eslang)
 add_subdirectory(eslang_io)
-set(ESLANG_LIBS eslang eslang_io)
-set (EXAMPLES basic tcp count send_back_pressure)
+add_subdirectory(eslang_www)
+set(ESLANG_LIBS eslang eslang_io eslang_www)
+set (EXAMPLES basic tcp count send_back_pressure www)
 foreach(EXAMPLE ${EXAMPLES})
   add_executable (example_${EXAMPLE} examples/${EXAMPLE}.cpp)
   target_link_libraries(example_${EXAMPLE} ${ESLANG_LIBS})
@@ -64,6 +67,8 @@ endforeach(EXAMPLE)
 
 find_package(gtest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIR})
+
+# test is only for the core libs (for now)
 file(GLOB test_files "tests/*.cpp"  "tests/*.h")
 add_executable(eslang_test ${test_files})
-target_link_libraries(eslang_test ${GTEST_LIBRARY} ${ESLANG_LIBS})
+target_link_libraries(eslang_test ${GTEST_LIBRARY} eslang)

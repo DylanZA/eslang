@@ -8,12 +8,14 @@ public:
   EslangException(std::string message = {})
       : std::runtime_error(std::move(message)) {}
 };
+}
 
 // todo: add line numbers etc...
 #define ESLANGEXCEPT(...)                                                      \
-  throw EslangException(folly::to<std::string>(__VA_ARGS__));
+  throw ::s::EslangException(folly::to<std::string>(__VA_ARGS__));
 
-#define ESLANGREQUIRE(b, ...)                                                      \
-  do { if (!b) throw EslangException(folly::to<std::string>(__VA_ARGS__)); } while(0);
-
-}
+#define ESLANGREQUIRE(b, ...)                                                  \
+  do {                                                                         \
+    if (!b)                                                                    \
+      throw ::s::EslangException(folly::to<std::string>(__VA_ARGS__));         \
+  } while (0);

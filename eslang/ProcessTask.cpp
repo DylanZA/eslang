@@ -3,65 +3,54 @@
 
 namespace s {
 
-ProcessTask ProcessTaskPromiseTypeWithReturn::get_return_object() {
-  return ProcessTask(
-      std::experimental::coroutine_handle<ProcessTaskPromiseTypeWithReturn>::from_promise(
-          *this));
+ProcessTask PromiseTypeBaseWithReturn::get_return_object() {
+  return ProcessTask(std::experimental::coroutine_handle<
+                     PromiseTypeBaseWithReturn>::from_promise(*this));
 }
 
-ProcessTaskPromiseType::~ProcessTaskPromiseType() {
+PromiseTypeBase::~PromiseTypeBase() {
   if (subCoroutineChild) {
-    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<>>::
-        from_promise(
-            *static_cast<MethodTaskPromiseTypeWithReturn<>*>(subCoroutineChild))
-            .destroy();
+    // subCoroutineChild->getHandle().destroy();
   }
 }
 
 MethodTaskPromiseType* MethodTaskPromiseType::methodTaskParentPromise() {
   ESLANGREQUIRE(this->parent, "No parent");
-  ESLANGREQUIRE(this->parentIsMethod, "Parent is wrong type");
-  return static_cast<MethodTaskPromiseType*>(parent);
+  // todo: not use dynamic cast
+  return dynamic_cast<MethodTaskPromiseType*>(parent);
 }
 
 std::experimental::coroutine_handle<> MethodTaskPromiseType::parentHandle() {
   ESLANGREQUIRE(parent, "No parent");
-  if (parentIsMethod) {
-    return std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(
-      *methodTaskParentPromise()
-    );
-  }
-  return std::experimental::coroutine_handle<ProcessTaskPromiseType>::from_promise(*parent);
+  return parent->getHandle();
 }
 
 MethodTask<void> MethodTaskPromiseTypeWithReturn<>::get_return_object() {
   return MethodTask<void>(
-    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<void>>::from_promise(
-      *this));
+      std::experimental::coroutine_handle<
+          MethodTaskPromiseTypeWithReturn<void>>::from_promise(*this));
 }
 
 bool ProcessTask::resume() {
-  ProcessTaskPromiseType* child = coroutine_.promise().subCoroutineChild;
+  PromiseTypeBase* child =  coroutine_.promise().subCoroutineChild;
   while (child && child->subCoroutineChild) {
     child = child->subCoroutineChild;
   }
   coroutine_.promise().waiting = nullptr;
-  try {
-    if (child) {
-      std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(
-        static_cast<MethodTaskPromiseType&>(*child)
-      ).resume();
-    } else {
-      coroutine_.resume();
+  if (child) {
+    try {
+      child->getHandle().resume();
+    } catch (std::exception const&) {
+      LOG(FATAL) << "child has thrown and is now dead, so we need to clean up "
+                    "the thing that thinks it owns child";
     }
-    if (coroutine_.done()) {
-      coroutine_ = {};
-      return true;
-    }
-    return false;
-  } catch (std::exception const&) {
-    coroutine_ = {};
-    throw;
+  } else {
+    coroutine_.resume();
   }
+  if (coroutine_.atFinalSuspend()) {
+    coroutine_.destroy();
+    return true;
+  }
+  return false;
 }
 }

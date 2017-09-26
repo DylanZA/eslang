@@ -2,33 +2,19 @@
 
 #include <gtest/gtest.h>
 
-
+#include "TestCommon.h"
 #include <eslang/Context.h>
 #include <folly/Conv.h>
 
 namespace s {
-struct LifetimeChecker {
-  std::atomic<int> n{ 0 };
-  void check() {
-    ASSERT_EQ(0, n);
-  }
-} lifetimeChecker;
 
-struct LifetimeCheck {
-  LifetimeCheck() {
-    ++lifetimeChecker.n;
-  }
-  ~LifetimeCheck() {
-    --lifetimeChecker.n;
-  }
-};
-#define LIFETIMECHECK()  LifetimeCheck lc;
 class ThrowingApp : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   Slot<std::string> message{this};
   ProcessTask run() {
+    LIFETIMECHECK;
     auto m = co_await recv(message);
     throw std::runtime_error(folly::to<std::string>("Throw ", m).c_str());
   }
@@ -36,29 +22,29 @@ public:
 
 class SenderApp : public Process {
 public:
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   ~SenderApp() { LOG(INFO) << "Sender destruct"; }
   TSendAddress<int> s_;
   SenderApp(ProcessArgs i, TSendAddress<int> s)
-    : Process(std::move(i)), s_(s) {}
+      : Process(std::move(i)), s_(s) {}
   static constexpr int N = 99;
   ProcessTask run() { co_await send<int>(s_, N); }
 };
 
-
 class EchoApp : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
 
   Slot<int> echo{this};
   ProcessTask run() {
+    LIFETIMECHECK;
+
     co_await send<int>(echo.address(), 5);
     auto res = co_await recv(echo);
     ASSERT_EQ(5, res);
     res = co_await recv(echo);
     ASSERT_EQ(SenderApp::N, res);
-
 
     auto pid = spawn<ThrowingApp>();
     co_await send<std::string>(pid, &s::ThrowingApp::message, "hello there");
@@ -76,13 +62,13 @@ public:
 class SleepingApp : public Process {
 public:
   std::chrono::milliseconds s_;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   SleepingApp(ProcessArgs i,
               std::chrono::milliseconds s = std::chrono::milliseconds(100))
       : Process(std::move(i)), s_(s) {}
 
   ProcessTask run() {
-    auto  now = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
     co_await sleep(s_);
     ASSERT_TRUE(std::chrono::steady_clock::now() - now >= s_);
     co_return;
@@ -91,7 +77,7 @@ public:
 
 class SpawnedApp : public Process {
 public:
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   int i_;
   SpawnedApp(ProcessArgs a, int i) : Process(std::move(a)), i_(i) {}
   ProcessTask run() {
@@ -103,7 +89,7 @@ public:
 class BlockForEver : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   ~BlockForEver() { LOG(INFO) << "Cleanly destroy"; }
   ProcessTask run() {
     Slot<int> s(this);
@@ -115,7 +101,7 @@ public:
 class NotifyApp : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   ProcessTask run() {
     for (int i = 0; i < 5; ++i) {
       LOG(INFO) << "Spawn " << i;
@@ -133,7 +119,7 @@ public:
 class MethodExample : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   static MethodTask<> subfn(Process* parent, int i) {
     LOG(INFO) << "Start sleep " << i;
     co_await parent->sleep(std::chrono::milliseconds(1000 + i * 100));
@@ -147,7 +133,7 @@ public:
       subs.push_back(subfn(parent, i));
     }
     LOG(INFO) << "Queued sleeps";
-    for (auto s : subs) {
+    for (auto& s : subs) {
       co_await s;
     }
     LOG(INFO) << "Done sleeps";
@@ -168,7 +154,7 @@ public:
 class MethodCleansUpExample : public Process {
 public:
   using Process::Process;
-  LIFETIMECHECK();
+  LIFETIMECHECK;
   struct Method : Process {
     std::shared_ptr<bool> b;
     Method(ProcessArgs a, std::shared_ptr<bool> b)
@@ -183,7 +169,10 @@ public:
       co_await WaitingAlways{};
     }
 
-    ProcessTask run() { co_await runSub(); }
+    ProcessTask run() {
+      ScopeLog sl("Method::run()");
+      co_await runSub();
+    }
 
     ~Method() { LOG(INFO) << "Method main task dead"; }
   };
@@ -209,7 +198,7 @@ template <class T> void run(std::string s, T fn) {
   fn(c);
   c.run();
   LOG(INFO) << "Done running example " << s;
-  s::lifetimeChecker.check();
+  lifetimeChecker.check();
 }
 
 template <class T> void runSimple(std::string s) {
@@ -219,13 +208,9 @@ template <class T> void runSimple(std::string s) {
 TEST(Basic, CleansUp) {
   runSimple<s::MethodCleansUpExample>("Method task cleans up");
 }
-TEST(Basic, Method) {
-  runSimple<s::MethodExample>("Method");
-}
+TEST(Basic, Method) { runSimple<s::MethodExample>("Method"); }
 
-TEST(Basic, Notify) {
-  runSimple<s::NotifyApp>("Notify");
-}
+TEST(Basic, Notify) { runSimple<s::NotifyApp>("Notify"); }
 
 TEST(Basic, Echo) {
   run("Echo with throwing", [](s::Context& c) {
@@ -234,6 +219,4 @@ TEST(Basic, Echo) {
   });
 }
 
-TEST(Basic, Sleeping) {
-  runSimple<s::SleepingApp>("Sleeping");
-}
+TEST(Basic, Sleeping) { runSimple<s::SleepingApp>("Sleeping"); }

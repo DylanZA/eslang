@@ -9,6 +9,14 @@
 
 namespace s {
 
+class NonMovable {
+public:
+  NonMovable() = default;
+  NonMovable(NonMovable const&) = delete;
+  NonMovable(NonMovable&&) = delete;
+  NonMovable& operator=(NonMovable&&) = delete;
+  NonMovable& operator=(NonMovable const&) = delete;
+};
 class MessageBase {
 public:
   class StorageBase {

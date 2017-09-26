@@ -32,12 +32,12 @@ struct WaitingMaybe : IWaiting {
 };
 
 struct WaitOnFuture : IWaiting {
-  folly::Future<folly::Unit> f;
-  explicit WaitOnFuture(folly::Future<folly::Unit> f) : f(std::move(f)) {}
+  EslangPromise* f;
+  explicit WaitOnFuture(EslangPromise* f) : f(f) {}
 
-  bool await_ready() noexcept { return f.isReady(); }
+  bool await_ready() noexcept { return f->isReady(); }
 
-  folly::Future<folly::Unit>* wakeOnFuture() override { return &f; }
+  EslangPromise* wakeOnFuture() override { return f; }
 
   void await_resume() {}
 };
@@ -55,18 +55,18 @@ template <class TUnderlying> struct WithWaitingTimeout : TUnderlying {
 using WaitingTimeout = WithWaitingTimeout<WaitingAlways>;
 
 template <class TUnderlying> struct WithWaitingFuture : TUnderlying {
-  folly::Future<folly::Unit> f;
+  EslangPromise* p;
 
   template <class... Args>
-  WithWaitingFuture(folly::Future<folly::Unit> f, Args&&... args)
-      : TUnderlying(std::forward<Args>(args)...), f(std::move(f)) {}
+  WithWaitingFuture(EslangPromise* p, Args&&... args)
+      : TUnderlying(std::forward<Args>(args)...), p(p) {}
 
-  folly::Future<folly::Unit>* wakeOnFuture() override { return &f; }
+  EslangPromise* wakeOnFuture() override { return p; }
 };
 
 template <class T>
-WithWaitingFuture<T> makeWithWaitingFuture(folly::Future<folly::Unit> f, T t) {
-  return WithWaitingFuture<T>(std::move(f), std::move(t));
+WithWaitingFuture<T> makeWithWaitingFuture(EslangPromise* p, T t) {
+  return WithWaitingFuture<T>(p, std::move(t));
 }
 
 template <class... TTypes> struct WaitingMessages : IWaiting {
@@ -95,9 +95,7 @@ template <class... TTypes> struct WaitingMessages : IWaiting {
     return any_ready(std::index_sequence_for<TTypes...>{});
   }
 
-  void
-  await_suspend(std::experimental::coroutine_handle<ProcessTask::promise_type>
-                    handle) noexcept {
+  template <class U> void await_suspend(U handle) noexcept {
     handle.promise().waiting = this;
   }
 
@@ -135,9 +133,7 @@ template <class T> struct WaitingMessage {
 
   bool await_ready() noexcept { return underlying.await_ready(); }
 
-  void
-  await_suspend(std::experimental::coroutine_handle<ProcessTask::promise_type>
-                    handle) noexcept {
+  template <class U> void await_suspend(U handle) noexcept {
     return underlying.await_suspend(std::move(handle));
   }
 

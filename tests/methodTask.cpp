@@ -3,14 +3,17 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include "TestCommon.h"
+
 namespace s {
 
 class MethodCounter : public Process {
 public:
   int const kMax;
-  MethodCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
-
+  MethodCounter(ProcessArgs i, int m = 256) : Process(std::move(i)), kMax(m) {}
+  LIFETIMECHECK;
   MethodTask<int> subRun(int n) {
+    LIFETIMECHECK;
     if (n > 0) {
       co_return co_await subRun(n - 1) + 1;
     }
@@ -23,54 +26,37 @@ public:
   }
 };
 
-class MethodBasic: public Process {
+class MethodBasic : public Process {
 public:
   using Process::Process;
-
+  LIFETIMECHECK;
   MethodTask<int> retIntCoro(int i) {
+    LIFETIMECHECK;
     co_return i;
   }
 
-  MethodTask<int> retIntFn(int i) {
-    return i;
-  }
-
   MethodTask<> doNothingCoro() {
+    LIFETIMECHECK;
     co_return;
-  }
-
-  MethodTask<> doNothingFn() {
-    return MethodTask<>{};
   }
 
   ProcessTask run() {
     auto a = WaitingYield{};
-    auto b= doNothingFn();
     auto c = doNothingCoro();
     ASSERT_EQ(5, co_await retIntCoro(5));
-    ASSERT_EQ(5, co_await retIntFn(5));
     co_await a;
-    co_await b;
     co_await c;
   }
 };
-
 }
 
-template<class T>
-void run(std::string type, int const k) {
+template <class T> void run() {
   s::Context c;
-  auto start = std::chrono::steady_clock::now();
-  auto starter = c.spawn<T>(k);
+  auto starter = c.spawn<T>();
   c.run();
-  LOG(INFO) << "Took "
-    << std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - start)
-    .count()
-    << "ms to count to " << k << " by spawning that many " << type;
+  lifetimeChecker.check();
 }
 
-TEST(MethodTask, Basic) {
-  // submethods run on the same stack, so cannot have too many
-  run<s::MethodCounter>("methods", 256);
-}
+TEST(MethodTask, Counter) { run<s::MethodCounter>(); }
+
+TEST(MethodTask, Basic) { run<s::MethodBasic>(); }

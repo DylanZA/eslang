@@ -45,8 +45,8 @@ class MethodCounter : public Process {
 public:
   int const kMax;
   MethodCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
-  
-  MethodTask<void> subRun(int n,int& out) {
+
+  MethodTask<void> subRun(int n, int& out) {
     if (n > 0) {
       co_await subRun(n - 1, out);
       ++out;
@@ -54,45 +54,36 @@ public:
     co_return;
   }
 
-  MethodTask<int> retIntCoro(int i) {
-    co_return i;
-  }
+  MethodTask<int> retIntCoro(int i) { co_return i; }
 
-  MethodTask<int> retIntFn(int i) {
-    return i;
-  }
+  MethodTask<int> retIntFn(int i) { return i; }
 
-  MethodTask<> doNothingCoro() {
-    co_return;
-  }
+  MethodTask<> doNothingCoro() { co_return; }
 
-  MethodTask<> doNothingFn() {
-    return MethodTask<>{};
-  }
+  MethodTask<> doNothingFn() { return MethodTask<>{}; }
 
   ProcessTask run() {
     co_await doNothingFn();
     co_await doNothingCoro();
-    LOG(INFO) << "Got " << co_await retIntCoro(5) << " and " << co_await retIntFn(5);
+    LOG(INFO) << "Got " << co_await retIntCoro(5) << " and "
+              << co_await retIntFn(5);
     int our_value = 0;
-    co_await subRun(kMax, our_value); 
+    co_await subRun(kMax, our_value);
     LOG(INFO) << "Counted to " << our_value << " wanted " << kMax;
   }
 };
-
 }
 
-template<class T>
-void run(std::string type, int const k) {
+template <class T> void run(std::string type, int const k) {
   s::Context c;
   auto start = std::chrono::steady_clock::now();
   auto starter = c.spawn<T>(k);
   c.run();
   LOG(INFO) << "Took "
-    << std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - start)
-    .count()
-    << "ms to count to " << k << " by spawning that many " << type;
+            << std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::steady_clock::now() - start)
+                   .count()
+            << "ms to count to " << k << " by spawning that many " << type;
 }
 
 int main(int argc, char** argv) {

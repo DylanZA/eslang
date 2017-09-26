@@ -22,17 +22,21 @@ void Context::RunningProcess::resume() {
 
     // cleanup old waiting things:
     cancelTimeout();
-
     try {
+      if (task.waiting()) {
+        if (auto* p = task.waiting()->wakeOnFuture()) {
+          p->process();
+        }
+      }
       ++resumes;
       task.resume();
+      if (task.done()) {
+        parent->addtoDestroy(pid, {});
+        return;
+      }
     } catch (std::exception const& error) {
       parent->addtoDestroy(
           pid, folly::to<std::string>("Caught exception: ", error.what()));
-      return;
-    }
-    if (task.done()) {
-      parent->addtoDestroy(pid, {});
       return;
     }
 
@@ -50,14 +54,13 @@ void Context::RunningProcess::resume() {
           parent->queueResume(pid, resumes);
         }
       }
-      if (auto* future = task.waiting()->wakeOnFuture()) {
-        future->via(parent->eventBase()).then([
-          this, resumes = this->resumes
-        ]() {
-          if (this->resumes == resumes) {
-            resume();
-          }
-        });
+      if (auto* promise = task.waiting()->wakeOnFuture()) {
+        promise->setContinuation(parent->eventBase(),
+                                 [ this, resumes = this->resumes ]() {
+                                   if (this->resumes == resumes) {
+                                     resume();
+                                   }
+                                 });
       }
     }
   } catch (std::exception const& e) {

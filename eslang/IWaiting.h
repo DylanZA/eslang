@@ -7,13 +7,13 @@
 
 #include "BaseTypes.h"
 #include "Except.h"
+#include "Future.h"
 
 namespace s {
 
-struct ProcessTaskPromiseTypeWithReturn;
+struct PromiseTypeBaseWithReturn;
 
-template<class T>
-struct MethodTaskPromiseTypeWithReturn;
+template <class T> struct MethodTaskPromiseTypeWithReturn;
 
 struct IWaiting {
   virtual bool isReadyForResume() const { return false; }
@@ -23,18 +23,13 @@ struct IWaiting {
 
   virtual std::optional<TimePoint> wakeOnTime() const { return {}; }
 
-  virtual folly::Future<folly::Unit>* wakeOnFuture() { return nullptr; }
+  virtual EslangPromise* wakeOnFuture() { return nullptr; }
 
   virtual bool isWaiting(SlotId s) const { return false; }
 
-  void await_suspend(
-    std::experimental::coroutine_handle<ProcessTaskPromiseTypeWithReturn> handle
-  ) noexcept;
-
-  template<class T>
-  void await_suspend(
-    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<T>> handle
-  ) noexcept {
+  template <class TPromise>
+  void
+  await_suspend(std::experimental::coroutine_handle<TPromise> handle) noexcept {
     handle.promise().waiting = this;
   }
 };
