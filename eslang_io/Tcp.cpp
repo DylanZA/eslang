@@ -120,9 +120,9 @@ struct ListenerProcess : public Process,
 };
 
 Pid Tcp::makeListener(Process* parent, TSendAddress<Socket> new_socket_address,
-                      uint32_t port) {
+                      Tcp::ListenerOptions options) {
   return parent->spawnLink<ListenerProcess>(std::move(new_socket_address),
-                                            port);
+                                            options.port);
 }
 
 void Tcp::initRecvSocket(Process* sender, Socket socket,

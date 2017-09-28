@@ -2,8 +2,13 @@
 #include <folly/io/IOBuf.h>
 
 namespace s {
-class Tcp : public Process {
+
+class Tcp {
 public:
+  struct ListenerOptions {
+    ListenerOptions(uint32_t port) : port(port) {}
+    uint32_t port;
+  };
   struct Socket {
     explicit Socket(Pid p) : pid(std::move(p)) {}
     Pid pid;
@@ -15,7 +20,7 @@ public:
   };
   static Pid makeListener(Process* parent,
                           TSendAddress<Socket> new_socket_address,
-                          uint32_t port);
+                          ListenerOptions options);
 
   static void initRecvSocket(Process* sender, Socket socket,
                              TSendAddress<ReceiveData> new_socket_address);
