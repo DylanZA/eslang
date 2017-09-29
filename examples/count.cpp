@@ -41,12 +41,12 @@ public:
   }
 };
 
-class SubProcessCounter : public Process {
+class MethodCounter : public Process {
 public:
   int const kMax;
-  SubProcessCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
+  MethodCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
 
-  SubProcessTask subRun(int n,int& out) {
+  MethodTask subRun(int n,int& out) {
     if (n > 0) {
       co_await subRun(n - 1, out);
       ++out;
@@ -54,11 +54,11 @@ public:
     co_return;
   }
 
-  SubProcessTask doNothingFn() {
-    return SubProcessTask{};
+  MethodTask doNothingFn() {
+    return MethodTask{};
   }
 
-  SubProcessTask doNothingCoro() {
+  MethodTask doNothingCoro() {
     co_return;
   }
 
@@ -89,8 +89,8 @@ void run(std::string type, int const k) {
 int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   folly::init(&argc, &argv);
-  // subprocesses run on the same stack, so cannot have too many
-  run<s::SubProcessCounter>("subprocesses", 256);
+  // submethods run on the same stack, so cannot have too many
+  run<s::MethodCounter>("methods", 256);
   run<s::Counter>("processes", 5000000);
   return 0;
 }

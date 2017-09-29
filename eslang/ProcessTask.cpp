@@ -11,15 +11,15 @@ ProcessTask ProcessTaskPromiseType::get_return_object() {
 
 ProcessTaskPromiseType::~ProcessTaskPromiseType() {
   if (subCoroutineChild) {
-    std::experimental::coroutine_handle<SubProcessTaskPromiseType>::
+    std::experimental::coroutine_handle<MethodTaskPromiseType>::
         from_promise(
-            *static_cast<SubProcessTaskPromiseType*>(subCoroutineChild))
+            *static_cast<MethodTaskPromiseType*>(subCoroutineChild))
             .destroy();
   }
 }
 
 void SuspendRunNext::await_suspend(
-  std::experimental::coroutine_handle<SubProcessTaskPromiseType> h
+  std::experimental::coroutine_handle<MethodTaskPromiseType> h
 ) {
   // got to copy this or else we may be destroyed
   if (run) {
@@ -32,23 +32,23 @@ void SuspendRunNext::await_suspend(
   }
 }
 
-SubProcessTaskPromiseType* SubProcessTaskPromiseType::subProcessParentPromise() {
+MethodTaskPromiseType* MethodTaskPromiseType::methodTaskParentPromise() {
   ESLANGREQUIRE(this->parent, "No parent");
-  ESLANGREQUIRE(this->parentIsSubProcess, "Parent is wrong type");
-  return static_cast<SubProcessTaskPromiseType*>(parent);
+  ESLANGREQUIRE(this->parentIsMethod, "Parent is wrong type");
+  return static_cast<MethodTaskPromiseType*>(parent);
 }
 
-std::experimental::coroutine_handle<> SubProcessTaskPromiseType::parentHandle() {
+std::experimental::coroutine_handle<> MethodTaskPromiseType::parentHandle() {
   ESLANGREQUIRE(parent, "No parent");
-  if (parentIsSubProcess) {
-    return std::experimental::coroutine_handle<SubProcessTaskPromiseType>::from_promise(subProcessParentPromise());
+  if (parentIsMethod) {
+    return std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(methodTaskParentPromise());
   }
   return std::experimental::coroutine_handle<ProcessTaskPromiseType>::from_promise(*parent);
 }
 
-SubProcessTask SubProcessTaskPromiseType::get_return_object() {
-  return SubProcessTask(std::experimental::coroutine_handle<
-                        SubProcessTaskPromiseType>::from_promise(*this));
+MethodTask MethodTaskPromiseType::get_return_object() {
+  return MethodTask(std::experimental::coroutine_handle<
+                        MethodTaskPromiseType>::from_promise(*this));
 }
 
 bool ProcessTask::resume() {
@@ -59,8 +59,8 @@ bool ProcessTask::resume() {
   coroutine_.promise().waiting = nullptr;
   try {
     if (child) {
-      std::experimental::coroutine_handle<SubProcessTaskPromiseType>::from_promise(
-        static_cast<SubProcessTaskPromiseType&>(*child)
+      std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(
+        static_cast<MethodTaskPromiseType&>(*child)
       ).resume();
     } else {
       coroutine_.resume();

@@ -11,7 +11,7 @@
 namespace s {
 
 struct ProcessTaskPromiseType;
-struct SubProcessTaskPromiseType;
+struct MethodTaskPromiseType;
 
 struct IWaiting {
   virtual bool isReadyForResume() const { return false; }
@@ -28,7 +28,7 @@ struct IWaiting {
   void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseType>
                          handle) noexcept;
   void
-  await_suspend(std::experimental::coroutine_handle<SubProcessTaskPromiseType>
+  await_suspend(std::experimental::coroutine_handle<MethodTaskPromiseType>
                     handle) noexcept;
 };
 

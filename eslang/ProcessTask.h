@@ -26,8 +26,8 @@ struct ProcessTaskPromiseType {
   ~ProcessTaskPromiseType();
 };
 
-class SubProcessTask;
-struct SubProcessTaskPromiseType;
+class MethodTask;
+struct MethodTaskPromiseType;
 
 struct SuspendRunNext {
   std::experimental::coroutine_handle<> run;
@@ -37,17 +37,17 @@ struct SuspendRunNext {
   }
   void await_resume() {}
   void await_suspend(
-    std::experimental::coroutine_handle<SubProcessTaskPromiseType> h
+    std::experimental::coroutine_handle<MethodTaskPromiseType> h
   );
 };
 
-struct SubProcessTaskPromiseType : ProcessTaskPromiseType {
+struct MethodTaskPromiseType : ProcessTaskPromiseType {
   // hack, msvc cannot have a coroutine_handle<T> inside of T :(
   // (or I cannot fix this)
   // if we are suspended, then one of these should be set so we can resume our parent
   ProcessTaskPromiseType* parent = nullptr;;
-  bool parentIsSubProcess = false;
-  SubProcessTaskPromiseType* subProcessParentPromise();
+  bool parentIsMethod = false;
+  MethodTaskPromiseType* methodTaskParentPromise();
   std::experimental::coroutine_handle<> parentHandle();
 
   auto final_suspend() {
@@ -64,7 +64,7 @@ struct SubProcessTaskPromiseType : ProcessTaskPromiseType {
   }
   auto initial_suspend() { return std::experimental::suspend_never{}; }
   void return_void() {}
-  SubProcessTask get_return_object();
+  MethodTask get_return_object();
 };
 
 class ProcessTask {
@@ -96,15 +96,15 @@ private:
   std::experimental::coroutine_handle<promise_type> coroutine_ = {};
 };
 
-class SubProcessTask {
+class MethodTask {
 public:
-  using promise_type = SubProcessTaskPromiseType;
-  explicit SubProcessTask(
+  using promise_type = MethodTaskPromiseType;
+  explicit MethodTask(
     std::experimental::coroutine_handle<promise_type> coroutine = {})
     : coroutine_(coroutine) {
   }
 
-  // these are used when you await on a subprocess task
+  // these are used when you await on a method task
   bool await_ready() {
     if (!coroutine_) {
       return true;
@@ -132,14 +132,14 @@ public:
   }
 
   void await_suspend(
-    std::experimental::coroutine_handle<SubProcessTaskPromiseType> parent
+    std::experimental::coroutine_handle<MethodTaskPromiseType> parent
   ) noexcept {
     auto& our_promise = coroutine_.promise();
     parent.promise().subCoroutineChild = &our_promise;
     auto* parent_promise = &parent.promise();
 
     our_promise.parent = parent_promise;
-    our_promise.parentIsSubProcess = true;
+    our_promise.parentIsMethod = true;
 
     IWaiting* waiting = our_promise.waiting;
 
@@ -148,13 +148,13 @@ public:
     // but when we resume C it waits again, now we have to re-propogate
     // but we dont get the benefit of await_suspend being called
     // could probably be done better, but for now api > performance
-    SubProcessTaskPromiseType* at = &our_promise;
+    MethodTaskPromiseType* at = &our_promise;
     while (at->parent) {
       at->parent->waiting = waiting;
-      if (!at->parentIsSubProcess) {
+      if (!at->parentIsMethod) {
         break;
       }
-      at = at->subProcessParentPromise();
+      at = at->methodTaskParentPromise();
     }
   }
 

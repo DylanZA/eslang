@@ -4,7 +4,7 @@
 namespace s {
 
 void IWaiting::await_suspend(
-    std::experimental::coroutine_handle<SubProcessTaskPromiseType>
+    std::experimental::coroutine_handle<MethodTaskPromiseType>
         handle) noexcept {
   handle.promise().waiting = this;
 }

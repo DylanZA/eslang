@@ -102,19 +102,19 @@ public:
   }
 };
 
-class SubProcessExample : public Process {
+class MethodExample : public Process {
 public:
   using Process::Process;
 
-  static SubProcessTask subfn(Process* parent, int i) {
+  static MethodTask subfn(Process* parent, int i) {
     LOG(INFO) << "Start sleep " << i;
     co_await parent->sleep(std::chrono::milliseconds(1000 + i * 100));
     LOG(INFO) << "Done sleep " << i;
   }
 
-  static SubProcessTask fn(Process* parent, TSendAddress<int> to_send, int i) {
+  static MethodTask fn(Process* parent, TSendAddress<int> to_send, int i) {
     LOG(INFO) << "Start sleep";
-    std::vector<SubProcessTask> subs;
+    std::vector<MethodTask> subs;
     for (int i = 3; i >= 0; i--) {
       subs.push_back(subfn(parent, i));
     }
@@ -131,22 +131,22 @@ public:
     LOG(INFO) << "Run " << 7;
     Slot<int> s(this);
     co_await fn(this, s.address(), 7);
-    LOG(INFO) << "Done calling subprocess, waiting for message";
+    LOG(INFO) << "Done calling method, waiting for message";
     auto msg = co_await recv(s);
     LOG(INFO) << msg << " done, expected " << 7;
   }
 };
 
-class SubProcessCleansUpExample : public Process {
+class MethodCleansUpExample : public Process {
 public:
   using Process::Process;
 
-  struct SubProcess : Process {
+  struct Method : Process {
     std::shared_ptr<bool> b;
-    SubProcess(ProcessArgs a, std::shared_ptr<bool> b)
+    Method(ProcessArgs a, std::shared_ptr<bool> b)
         : Process(std::move(a)), b(b) {}
 
-    SubProcessTask runSub() {
+    MethodTask runSub() {
       auto mv_b = std::move(b);
       SCOPE_EXIT {
         *mv_b = true;
@@ -157,14 +157,14 @@ public:
 
     ProcessTask run() { co_await runSub(); }
 
-    ~SubProcess() { LOG(INFO) << "SubProcess main task dead"; }
+    ~Method() { LOG(INFO) << "Method main task dead"; }
   };
 
   ProcessTask run() {
-    // spawn a subprocess, and make sure that if we kill it it cleans up the
+    // spawn a submethod, and make sure that if we kill it it cleans up the
     // coroutine
     auto bool_test = std::make_shared<bool>(false);
-    auto sub_two = spawn<SubProcess>(bool_test);
+    auto sub_two = spawn<Method>(bool_test);
     co_await WaitingYield{};
     queueKill(sub_two);
     co_await WaitingYield{};
@@ -193,8 +193,8 @@ int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   FLAGS_v = 2;
   folly::init(&argc, &argv);
-  runSimple<s::SubProcessCleansUpExample>("Subprocess cleans up");
-  runSimple<s::SubProcessExample>("Subprocess");
+  runSimple<s::MethodCleansUpExample>("Method task cleans up");
+  runSimple<s::MethodExample>("Method");
   runSimple<s::NotifyApp>("Notify");
   run("Echo with throwing", [](s::Context& c) {
     auto pid = c.spawn<s::EchoApp>();
