@@ -44,7 +44,7 @@ struct SubProcessTaskPromiseType : ProcessTaskPromiseType {
       // got to copy this or else we may be destroyed
       auto r = run;
       h.destroy();
-      run.resume();
+      r.resume();
     }
   };
 
