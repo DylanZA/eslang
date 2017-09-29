@@ -9,6 +9,15 @@ ProcessTask ProcessTaskPromiseType::get_return_object() {
           *this));
 }
 
+ProcessTaskPromiseType::~ProcessTaskPromiseType() {
+  if (subCoroutineChild) {
+    std::experimental::coroutine_handle<SubProcessTaskPromiseType>::
+        from_promise(
+            *static_cast<SubProcessTaskPromiseType*>(subCoroutineChild))
+            .destroy();
+  }
+}
+
 std::experimental::coroutine_handle<SubProcessTaskPromiseType>
 SubProcessTaskPromiseType::subTaskParent() {
   return std::experimental::coroutine_handle<
@@ -25,20 +34,20 @@ bool ProcessTask::resume() {
   if (this->waiting()) {
     subhandle = this->waiting()->subProcessResume;
   }
-  coroutine_.get().promise().waiting = nullptr;
+  coroutine_.promise().waiting = nullptr;
   try {
     if (subhandle) {
       subhandle.resume();
     } else {
-      coroutine_.get().resume();
+      coroutine_.resume();
     }
-    if (coroutine_.get().done()) {
-      coroutine_.clear();
+    if (coroutine_.done()) {
+      coroutine_ = {};
       return true;
     }
     return false;
   } catch (std::exception const&) {
-    coroutine_.clear();
+    coroutine_ = {};
     throw;
   }
 }

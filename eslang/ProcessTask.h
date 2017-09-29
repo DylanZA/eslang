@@ -6,53 +6,62 @@
 #include <vector>
 
 #include "BaseTypes.h"
-#include "CoroutineHandle.h"
 #include "Except.h"
 
 namespace s {
 
 struct IWaiting;
 class ProcessTask;
+
 struct ProcessTaskPromiseType {
   IWaiting* waiting = nullptr;
+  ProcessTaskPromiseType* subCoroutineChild = nullptr;
   auto initial_suspend() { return std::experimental::suspend_always{}; }
   auto final_suspend() { return std::experimental::suspend_always{}; }
   void return_void() {}
   ProcessTask get_return_object();
+  ~ProcessTaskPromiseType();
 };
 
 class SubProcessTask;
-struct SubProcessTaskPromiseType {
-  IWaiting* waiting = nullptr;
-  std::experimental::coroutine_handle<SubProcessTaskPromiseType>
-  subTaskParent();
+struct SubProcessTaskPromiseType : ProcessTaskPromiseType {
   // hack, msvc cannot have a coroutine_handle<T> inside of T :(
   // (or I cannot fix this)
   SubProcessTaskPromiseType* subTaskParentPromise = nullptr;
   std::experimental::coroutine_handle<ProcessTaskPromiseType> fullParent = {};
-  auto initial_suspend() { return std::experimental::suspend_never{}; }
+  std::experimental::coroutine_handle<SubProcessTaskPromiseType>
+  subTaskParent();
 
   struct SuspendRunNext : std::experimental::suspend_always {
     std::experimental::coroutine_handle<> run;
+
     SuspendRunNext(std::experimental::coroutine_handle<> r) : run(r) {}
+
     void await_resume() {}
-    void
-    await_suspend(std::experimental::coroutine_handle<SubProcessTaskPromiseType>
-                      h) noexcept {
+
+    void await_suspend(
+        std::experimental::coroutine_handle<SubProcessTaskPromiseType> h) {
+      // got to copy this or else we may be destroyed
       auto r = run;
       h.destroy();
-      r.resume();
+      run.resume();
     }
   };
 
   auto final_suspend() {
+    // make sure our parent knows that it's child is dead now,
+    // and then run the parent
     if (fullParent) {
+      fullParent.promise().subCoroutineChild = nullptr;
       return SuspendRunNext{fullParent};
     } else {
+      subTaskParentPromise->subCoroutineChild = nullptr;
       return SuspendRunNext{subTaskParent()};
     }
   }
+  auto initial_suspend() { return std::experimental::suspend_never{}; }
   void return_void() {}
+
   SubProcessTask get_return_object();
 };
 
@@ -62,18 +71,27 @@ public:
   explicit ProcessTask(
       std::experimental::coroutine_handle<promise_type> coroutine)
       : coroutine_(coroutine) {}
+  ProcessTask(ProcessTask const&) = delete;
+  ProcessTask& operator=(ProcessTask const&) = delete;
+  ProcessTask(ProcessTask&& rhs) { std::swap(rhs.coroutine_, coroutine_); }
+  ProcessTask& operator=(ProcessTask&& rhs) {
+    std::swap(rhs.coroutine_, coroutine_);
+  }
+  ~ProcessTask() {
+    if (!done()) {
+      coroutine_.destroy();
+    }
+  }
+  bool done() const { return !static_cast<bool>(coroutine_); }
 
-  bool done() const { return !static_cast<bool>(coroutine_.get()); }
+  IWaiting* waiting() { return coroutine_.promise().waiting; }
 
-  IWaiting* waiting() { return coroutine_.get().promise().waiting; }
-
-  IWaiting const* waiting() const { return coroutine_.get().promise().waiting; }
+  IWaiting const* waiting() const { return coroutine_.promise().waiting; }
 
   bool resume();
 
 private:
-  friend class SubProcessTask;
-  CoroutineHandle<promise_type> coroutine_;
+  std::experimental::coroutine_handle<promise_type> coroutine_ = {};
 };
 
 class SubProcessTask {
@@ -84,6 +102,7 @@ public:
       : coroutine_(coroutine) {}
   // these are used when you await on a process task
   bool await_ready() noexcept { return false; }
+
   void await_resume() {}
 
   void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseType>
@@ -91,12 +110,14 @@ public:
     // propogate the IWaiting up the stack
     coroutine_.promise().fullParent = upward_handle;
     upward_handle.promise().waiting = coroutine_.promise().waiting;
+    upward_handle.promise().subCoroutineChild = &coroutine_.promise();
   }
 
   void
   await_suspend(std::experimental::coroutine_handle<SubProcessTaskPromiseType>
                     upward_handle) noexcept {
     auto& our_promise = coroutine_.promise();
+    upward_handle.promise().subCoroutineChild = &our_promise;
     auto* up_promise = &upward_handle.promise();
     our_promise.subTaskParentPromise = &upward_handle.promise();
     IWaiting* waiting = our_promise.waiting;

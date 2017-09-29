@@ -136,6 +136,44 @@ public:
     LOG(INFO) << msg << " done, expected " << 7;
   }
 };
+
+class SubProcessCleansUpExample : public Process {
+public:
+  using Process::Process;
+
+  struct SubProcess : Process {
+    std::shared_ptr<bool> b;
+    SubProcess(ProcessArgs a, std::shared_ptr<bool> b)
+        : Process(std::move(a)), b(b) {}
+
+    SubProcessTask runSub() {
+      auto mv_b = std::move(b);
+      SCOPE_EXIT {
+        *mv_b = true;
+        LOG(INFO) << "Sub process sub task dead";
+      };
+      co_await WaitingAlways{};
+    }
+
+    ProcessTask run() { co_await runSub(); }
+
+    ~SubProcess() { LOG(INFO) << "SubProcess main task dead"; }
+  };
+
+  ProcessTask run() {
+    // spawn a subporrcess, and make sure that if we kill it it cleans up the
+    // coroutine
+    auto bool_test = std::make_shared<bool>(false);
+    auto sub_two = spawn<SubProcess>(bool_test);
+    co_await WaitingYield{};
+    queueKill(sub_two);
+    co_await WaitingYield{};
+    LOG(INFO) << "Bool is " << *bool_test << " expected " << true;
+    if (!*bool_test) {
+      ESLANGEXCEPT("failed to clean up");
+    }
+  }
+};
 }
 
 template <class T> void run(std::string s, T fn) {
@@ -155,6 +193,7 @@ int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   FLAGS_v = 2;
   folly::init(&argc, &argv);
+  runSimple<s::SubProcessCleansUpExample>("Subprocess cleans up");
   runSimple<s::SubProcessExample>("Subprocess");
   runSimple<s::NotifyApp>("Notify");
   run("Echo with throwing", [](s::Context& c) {

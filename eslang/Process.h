@@ -109,6 +109,8 @@ public:
     return WaitingMessage<T>(this->tryRecv<T>(slot));
   }
 
+  void queueKill(Pid p);
+
 protected:
   void link(Pid p);
 

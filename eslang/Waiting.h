@@ -16,6 +16,13 @@ struct WaitingAlways : IWaiting {
   void await_resume() {}
 };
 
+// returns control to context for one cycle
+struct WaitingYield : IWaiting {
+  bool await_ready() noexcept { return false; }
+  void await_resume() {}
+  bool isReadyForResume() const { return true; }
+};
+
 struct WaitingMaybe : IWaiting {
   bool wait;
   explicit WaitingMaybe(bool wait) : wait(wait) {}
