@@ -42,8 +42,9 @@ public:
     ProcessArgs a(nextPid());
     return spawnArgs<T, Args...>(std::move(a), std::forward<Args>(args)...);
   }
-  
-  template <class T, class Fn, class... Args> Pid spawnWith(Fn f, Args... args) {
+
+  template <class T, class Fn, class... Args>
+  Pid spawnWith(Fn f, Args... args) {
     ProcessArgs a(nextPid());
     f(a);
     return spawnArgs<T, Args...>(std::move(a), std::forward<Args>(args)...);
@@ -80,7 +81,7 @@ private:
       ESLANGEXCEPT("Expected done to be false");
     }
     processes_[a.pid.idx()] = std::make_unique<RunningProcess>(
-      a.pid, std::move(p), std::move(res), this);
+        a.pid, std::move(p), std::move(res), this);
     queueResume(a.pid, 0);
     return a.pid;
   }

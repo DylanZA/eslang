@@ -47,27 +47,29 @@ public:
 
   void addKillOnDie(Pid b) { killOnDie_.push_back(b); }
   std::vector<Pid> const& killOnDie() const { return killOnDie_; }
-  std::vector<TSendAddress<Pid>> const& notifyOnDie() const { return notifyOnDie_; }
+  std::vector<TSendAddress<Pid>> const& notifyOnDie() const {
+    return notifyOnDie_;
+  }
 
   template <class T, class... Args> Pid spawn(Args... args) {
     return c_->spawn<T>(std::forward<Args>(args)...);
   }
 
   template <class T, class... Args> Pid spawnLink(Args... args) {
-    auto new_pid = c_->spawnWith<T>([p = this->pid_](ProcessArgs& a) {
-      a.killOnDie = p;
-    }, std::forward<Args>(args)...);
+    auto new_pid =
+        c_->spawnWith<T>([p = this->pid_](ProcessArgs & a) { a.killOnDie = p; },
+                         std::forward<Args>(args)...);
     addKillOnDie(new_pid);
     return new_pid;
   }
 
   // spawn a process, link it to us (if we die), but notify us if they die
-  template <class T, class... Args> Pid spawnLinkNotify(
-    TSendAddress<Pid> send_address,
-    Args... args) {
-    auto new_pid = c_->spawnWith<T>([s = std::move(send_address)](ProcessArgs& a) {
-      a.notifyOnDead = s;
-    }, std::forward<Args>(args)...);
+  template <class T, class... Args>
+  Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args) {
+    auto new_pid =
+        c_->spawnWith<T>([s = std::move(send_address)](
+                             ProcessArgs & a) { a.notifyOnDead = s; },
+                         std::forward<Args>(args)...);
     addKillOnDie(new_pid);
     return new_pid;
   }
@@ -85,7 +87,6 @@ public:
 
   Context* c() { return c_; }
 
-protected:
   template <class... TSlots>
   WithWaitingTimeout<WaitingMessages<TSlots...>>
   timedRecv(std::chrono::milliseconds time, Slot<TSlots>&... slots) {
@@ -108,6 +109,7 @@ protected:
     return WaitingMessage<T>(this->tryRecv<T>(slot));
   }
 
+protected:
   void link(Pid p);
 
 protected:

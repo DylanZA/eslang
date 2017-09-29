@@ -11,8 +11,11 @@
 namespace s {
 
 struct ProcessTaskPromiseType;
+struct SubProcessTaskPromiseType;
 
 struct IWaiting {
+  std::experimental::coroutine_handle<> subProcessResume = {};
+
   virtual bool isReadyForResume() const { return false; }
   virtual std::vector<SendAddress> const* wakeOnSender() const {
     return nullptr;
@@ -26,6 +29,9 @@ struct IWaiting {
 
   void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseType>
                          handle) noexcept;
+  void
+  await_suspend(std::experimental::coroutine_handle<SubProcessTaskPromiseType>
+                    handle) noexcept;
 };
 
 } // namespace s

@@ -8,7 +8,7 @@ TimePoint Context::now() const { return std::chrono::steady_clock::now(); }
 
 Context::RunningProcess::RunningProcess(Pid pid, std::unique_ptr<Process> proc,
                                         ProcessTask t, Context* parent)
-  : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent) {
+    : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent) {
   if (task.waiting()) {
     ESLANGEXCEPT("Should not have a waiting ptr now");
   }
@@ -26,10 +26,9 @@ void Context::RunningProcess::resume() {
     try {
       ++resumes;
       task.resume();
-    }
-    catch (std::exception const& error) {
+    } catch (std::exception const& error) {
       parent->addtoDestroy(
-        pid, folly::to<std::string>("Caught exception: ", error.what()));
+          pid, folly::to<std::string>("Caught exception: ", error.what()));
       return;
     }
     if (task.done()) {
@@ -39,29 +38,29 @@ void Context::RunningProcess::resume() {
 
     if (task.waiting()->isReadyForResume()) {
       parent->queueResume(pid, resumes);
-    }
-    else {
+    } else {
       if (task.waiting()->wakeOnTime()) {
         auto now = parent->now();
         if (*task.waiting()->wakeOnTime() > now) {
-          auto const wait = std::chrono::duration_cast<std::chrono::milliseconds>(
-            *task.waiting()->wakeOnTime() - now);
+          auto const wait =
+              std::chrono::duration_cast<std::chrono::milliseconds>(
+                  *task.waiting()->wakeOnTime() - now);
           parent->wheelTimer_->scheduleTimeout(this, wait);
-        }
-        else {
+        } else {
           parent->queueResume(pid, resumes);
         }
       }
       if (auto* future = task.waiting()->wakeOnFuture()) {
-        future->via(parent->eventBase()).then([this, resumes = this->resumes]() {
+        future->via(parent->eventBase()).then([
+          this, resumes = this->resumes
+        ]() {
           if (this->resumes == resumes) {
             resume();
           }
         });
       }
     }
-  }
-  catch (std::exception const& e) {
+  } catch (std::exception const& e) {
     LOG(FATAL) << "Uncaught " << e.what();
   }
 }
@@ -113,7 +112,7 @@ void Context::destroy(std::unique_ptr<RunningProcess> p, std::string reason) {
   for (auto to_destroy : p->process->killOnDie()) {
     addtoDestroy(to_destroy, reason);
   }
-  
+
   for (auto to_notify : p->process->notifyOnDie()) {
     queueSend(to_notify, Message<Pid>(pid));
   }
@@ -148,7 +147,6 @@ void Context::queueSend(SendAddress a, MessageBase m) {
   queue_.back().message = std::make_pair(std::move(a), std::move(m));
 }
 
-
 void Context::processQueueItem(ToProcessItem i) {
   if (i.message) {
     auto it = findProc(i.pid);
@@ -171,8 +169,7 @@ void Context::run() {
         auto i = std::move(queue_.front());
         queue_.pop_front();
         processQueueItem(std::move(i));
-      }
-      else {
+      } else {
         eventBase_.loopOnce();
       }
       while (toDestroy_.size()) {
@@ -182,8 +179,7 @@ void Context::run() {
         destroy(std::move(m.first), std::move(m.second));
       }
     }
-  }
-  catch (std::exception const& e) {
+  } catch (std::exception const& e) {
     LOG(INFO) << "Uncaught exception " << e.what();
     throw;
   }

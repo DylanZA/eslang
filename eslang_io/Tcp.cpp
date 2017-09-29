@@ -128,13 +128,11 @@ Pid Tcp::makeListener(Process* parent, TSendAddress<Socket> new_socket_address,
 void Tcp::initRecvSocket(Process* sender, Socket socket,
                          TSendAddress<ReceiveData> new_socket_address) {
   VLOG(2) << "Init " << socket.pid;
-  sender->send(socket.pid, &SocketProcess::init,
-               std::move(new_socket_address));
+  sender->send(socket.pid, &SocketProcess::init, std::move(new_socket_address));
 }
 
 void Tcp::send(Process* sender, Socket socket,
                std::unique_ptr<folly::IOBuf> data) {
-  sender->send(socket.pid, &SocketProcess::send_data,
-      std::move(data));
+  sender->send(socket.pid, &SocketProcess::send_data, std::move(data));
 }
 }

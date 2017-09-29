@@ -14,8 +14,7 @@ namespace s {
 class Process;
 
 // todo: use a small_vector or something
-template <class T>
-class MessageQueue {
+template <class T> class MessageQueue {
 public:
   MessageQueue() = default;
   MessageQueue(MessageQueue const&) = delete;
@@ -32,8 +31,7 @@ public:
   void push(Message<T> t) {
     if (stackStorage) {
       others.push_back(std::move(t));
-    }
-    else {
+    } else {
       stackStorage = std::move(t);
     }
   }
