@@ -14,8 +14,6 @@ struct ProcessTaskPromiseType;
 struct SubProcessTaskPromiseType;
 
 struct IWaiting {
-  std::experimental::coroutine_handle<> subProcessResume = {};
-
   virtual bool isReadyForResume() const { return false; }
   virtual std::vector<SendAddress> const* wakeOnSender() const {
     return nullptr;

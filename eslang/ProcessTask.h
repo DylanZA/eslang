@@ -7,6 +7,7 @@
 
 #include "BaseTypes.h"
 #include "Except.h"
+#include <variant>
 
 namespace s {
 
@@ -17,51 +18,52 @@ struct ProcessTaskPromiseType {
   IWaiting* waiting = nullptr;
   ProcessTaskPromiseType* subCoroutineChild = nullptr;
   auto initial_suspend() { return std::experimental::suspend_always{}; }
-  auto final_suspend() { return std::experimental::suspend_always{}; }
+  auto final_suspend() { 
+    return std::experimental::suspend_always{}; 
+  }
   void return_void() {}
   ProcessTask get_return_object();
   ~ProcessTaskPromiseType();
 };
 
 class SubProcessTask;
+struct SubProcessTaskPromiseType;
+
+struct SuspendRunNext {
+  std::experimental::coroutine_handle<> run;
+  SuspendRunNext(std::experimental::coroutine_handle<> r = {}) : run(r) {}
+  bool await_ready() {
+    return false;
+  }
+  void await_resume() {}
+  void await_suspend(
+    std::experimental::coroutine_handle<SubProcessTaskPromiseType> h
+  );
+};
+
 struct SubProcessTaskPromiseType : ProcessTaskPromiseType {
   // hack, msvc cannot have a coroutine_handle<T> inside of T :(
   // (or I cannot fix this)
-  SubProcessTaskPromiseType* subTaskParentPromise = nullptr;
-  std::experimental::coroutine_handle<ProcessTaskPromiseType> fullParent = {};
-  std::experimental::coroutine_handle<SubProcessTaskPromiseType>
-  subTaskParent();
-
-  struct SuspendRunNext : std::experimental::suspend_always {
-    std::experimental::coroutine_handle<> run;
-
-    SuspendRunNext(std::experimental::coroutine_handle<> r) : run(r) {}
-
-    void await_resume() {}
-
-    void await_suspend(
-        std::experimental::coroutine_handle<SubProcessTaskPromiseType> h) {
-      // got to copy this or else we may be destroyed
-      auto r = run;
-      h.destroy();
-      r.resume();
-    }
-  };
+  // if we are suspended, then one of these should be set so we can resume our parent
+  ProcessTaskPromiseType* parent = nullptr;;
+  bool parentIsSubProcess = false;
+  SubProcessTaskPromiseType* subProcessParentPromise();
+  std::experimental::coroutine_handle<> parentHandle();
 
   auto final_suspend() {
     // make sure our parent knows that it's child is dead now,
     // and then run the parent
-    if (fullParent) {
-      fullParent.promise().subCoroutineChild = nullptr;
-      return SuspendRunNext{fullParent};
-    } else {
-      subTaskParentPromise->subCoroutineChild = nullptr;
-      return SuspendRunNext{subTaskParent()};
+    if (parent) {
+      parent->subCoroutineChild = nullptr;
+      return SuspendRunNext{ parentHandle() };
+    }
+    else {
+      // else we were never actually suspended, so nothing to do
+      return SuspendRunNext{ };
     }
   }
   auto initial_suspend() { return std::experimental::suspend_never{}; }
   void return_void() {}
-
   SubProcessTask get_return_object();
 };
 
@@ -69,8 +71,8 @@ class ProcessTask {
 public:
   using promise_type = ProcessTaskPromiseType;
   explicit ProcessTask(
-      std::experimental::coroutine_handle<promise_type> coroutine)
-      : coroutine_(coroutine) {}
+    std::experimental::coroutine_handle<promise_type> coroutine)
+    : coroutine_(coroutine) {}
   ProcessTask(ProcessTask const&) = delete;
   ProcessTask& operator=(ProcessTask const&) = delete;
   ProcessTask(ProcessTask&& rhs) { std::swap(rhs.coroutine_, coroutine_); }
@@ -98,28 +100,47 @@ class SubProcessTask {
 public:
   using promise_type = SubProcessTaskPromiseType;
   explicit SubProcessTask(
-      std::experimental::coroutine_handle<promise_type> coroutine)
-      : coroutine_(coroutine) {}
-  // these are used when you await on a process task
-  bool await_ready() noexcept { return false; }
+    std::experimental::coroutine_handle<promise_type> coroutine = {})
+    : coroutine_(coroutine) {
+  }
+
+  // these are used when you await on a subprocess task
+  bool await_ready() {
+    if (!coroutine_) {
+      return true;
+    } else if (coroutine_.done()) {
+      // can await_ready have side effects?
+      // not sure
+      coroutine_.destroy();
+      coroutine_ = {};
+      return true;
+    } else if (!coroutine_.promise().waiting) {
+      return true;
+    }
+    return false;
+  }
 
   void await_resume() {}
 
   void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseType>
-                         upward_handle) noexcept {
+                     parent) noexcept {
+    coroutine_.promise().parent = &parent.promise();
+
     // propogate the IWaiting up the stack
-    coroutine_.promise().fullParent = upward_handle;
-    upward_handle.promise().waiting = coroutine_.promise().waiting;
-    upward_handle.promise().subCoroutineChild = &coroutine_.promise();
+    parent.promise().waiting = coroutine_.promise().waiting;
+    parent.promise().subCoroutineChild = &coroutine_.promise();
   }
 
-  void
-  await_suspend(std::experimental::coroutine_handle<SubProcessTaskPromiseType>
-                    upward_handle) noexcept {
+  void await_suspend(
+    std::experimental::coroutine_handle<SubProcessTaskPromiseType> parent
+  ) noexcept {
     auto& our_promise = coroutine_.promise();
-    upward_handle.promise().subCoroutineChild = &our_promise;
-    auto* up_promise = &upward_handle.promise();
-    our_promise.subTaskParentPromise = &upward_handle.promise();
+    parent.promise().subCoroutineChild = &our_promise;
+    auto* parent_promise = &parent.promise();
+
+    our_promise.parent = parent_promise;
+    our_promise.parentIsSubProcess = true;
+
     IWaiting* waiting = our_promise.waiting;
 
     // propogate the new IWaiting up the stack
@@ -127,14 +148,14 @@ public:
     // but when we resume C it waits again, now we have to re-propogate
     // but we dont get the benefit of await_suspend being called
     // could probably be done better, but for now api > performance
-    do {
-      up_promise->waiting = waiting;
-      if (up_promise->fullParent) {
-        up_promise->fullParent.promise().waiting = waiting;
+    SubProcessTaskPromiseType* at = &our_promise;
+    while (at->parent) {
+      at->parent->waiting = waiting;
+      if (!at->parentIsSubProcess) {
         break;
       }
-      up_promise = up_promise->subTaskParentPromise;
-    } while (up_promise);
+      at = at->subProcessParentPromise();
+    }
   }
 
 private:

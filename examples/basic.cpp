@@ -161,7 +161,7 @@ public:
   };
 
   ProcessTask run() {
-    // spawn a subporrcess, and make sure that if we kill it it cleans up the
+    // spawn a subprocess, and make sure that if we kill it it cleans up the
     // coroutine
     auto bool_test = std::make_shared<bool>(false);
     auto sub_two = spawn<SubProcess>(bool_test);

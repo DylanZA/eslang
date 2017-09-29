@@ -40,20 +40,57 @@ public:
     }
   }
 };
+
+class SubProcessCounter : public Process {
+public:
+  int const kMax;
+  SubProcessCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
+
+  SubProcessTask subRun(int n,int& out) {
+    if (n > 0) {
+      co_await subRun(n - 1, out);
+      ++out;
+    }
+    co_return;
+  }
+
+  SubProcessTask doNothingFn() {
+    return SubProcessTask{};
+  }
+
+  SubProcessTask doNothingCoro() {
+    co_return;
+  }
+
+  ProcessTask run() {
+    co_await doNothingFn();
+    co_await doNothingCoro();
+    int our_value = 0;
+    co_await subRun(kMax, our_value); 
+    LOG(INFO) << "Counted to " << our_value << " wanted " << kMax;
+  }
+};
+
+}
+
+template<class T>
+void run(std::string type, int const k) {
+  s::Context c;
+  auto start = std::chrono::steady_clock::now();
+  auto starter = c.spawn<T>(k);
+  c.run();
+  LOG(INFO) << "Took "
+    << std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now() - start)
+    .count()
+    << "ms to count to " << k << " by spawning that many " << type;
 }
 
 int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   folly::init(&argc, &argv);
-  s::Context c;
-  auto start = std::chrono::steady_clock::now();
-  int const k = 5000000;
-  auto starter = c.spawn<s::Counter>(k);
-  c.run();
-  LOG(INFO) << "Took "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(
-                   std::chrono::steady_clock::now() - start)
-                   .count()
-            << "ms to count to " << k << " by spawning that many processes";
+  // subprocesses run on the same stack, so cannot have too many
+  run<s::SubProcessCounter>("subprocesses", 256);
+  run<s::Counter>("processes", 5000000);
   return 0;
 }

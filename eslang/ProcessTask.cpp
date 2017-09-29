@@ -18,10 +18,32 @@ ProcessTaskPromiseType::~ProcessTaskPromiseType() {
   }
 }
 
-std::experimental::coroutine_handle<SubProcessTaskPromiseType>
-SubProcessTaskPromiseType::subTaskParent() {
-  return std::experimental::coroutine_handle<
-      SubProcessTaskPromiseType>::from_promise(*this->subTaskParentPromise);
+void SuspendRunNext::await_suspend(
+  std::experimental::coroutine_handle<SubProcessTaskPromiseType> h
+) {
+  // got to copy this or else we may be destroyed
+  if (run) {
+    auto r = run;
+    h.destroy();
+    r.resume();
+  }
+  else {
+    //h.destroy();
+  }
+}
+
+SubProcessTaskPromiseType* SubProcessTaskPromiseType::subProcessParentPromise() {
+  ESLANGREQUIRE(this->parent, "No parent");
+  ESLANGREQUIRE(this->parentIsSubProcess, "Parent is wrong type");
+  return static_cast<SubProcessTaskPromiseType*>(parent);
+}
+
+std::experimental::coroutine_handle<> SubProcessTaskPromiseType::parentHandle() {
+  ESLANGREQUIRE(parent, "No parent");
+  if (parentIsSubProcess) {
+    return std::experimental::coroutine_handle<SubProcessTaskPromiseType>::from_promise(subProcessParentPromise());
+  }
+  return std::experimental::coroutine_handle<ProcessTaskPromiseType>::from_promise(*parent);
 }
 
 SubProcessTask SubProcessTaskPromiseType::get_return_object() {
@@ -30,14 +52,16 @@ SubProcessTask SubProcessTaskPromiseType::get_return_object() {
 }
 
 bool ProcessTask::resume() {
-  std::experimental::coroutine_handle<> subhandle = {};
-  if (this->waiting()) {
-    subhandle = this->waiting()->subProcessResume;
+  ProcessTaskPromiseType* child = coroutine_.promise().subCoroutineChild;
+  while (child && child->subCoroutineChild) {
+    child = child->subCoroutineChild;
   }
   coroutine_.promise().waiting = nullptr;
   try {
-    if (subhandle) {
-      subhandle.resume();
+    if (child) {
+      std::experimental::coroutine_handle<SubProcessTaskPromiseType>::from_promise(
+        static_cast<SubProcessTaskPromiseType&>(*child)
+      ).resume();
     } else {
       coroutine_.resume();
     }

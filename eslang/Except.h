@@ -12,4 +12,8 @@ public:
 // todo: add line numbers etc...
 #define ESLANGEXCEPT(...)                                                      \
   throw EslangException(folly::to<std::string>(__VA_ARGS__));
+
+#define ESLANGREQUIRE(b, ...)                                                      \
+  do { if (!b) throw EslangException(folly::to<std::string>(__VA_ARGS__)); } while(0);
+
 }
