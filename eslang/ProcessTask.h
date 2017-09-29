@@ -21,13 +21,20 @@ struct ProcessTaskPromiseType {
   auto final_suspend() { 
     return std::experimental::suspend_always{}; 
   }
-  void return_void() {}
-  ProcessTask get_return_object();
   ~ProcessTaskPromiseType();
 };
 
+struct ProcessTaskPromiseTypeWithReturn : ProcessTaskPromiseType {
+  void return_void() {}
+  ProcessTask get_return_object();
+};
+
+
+template<class T = void>
 class MethodTask;
-struct MethodTaskPromiseType;
+
+template<class T = void>
+struct MethodTaskPromiseTypeWithReturn;
 
 struct SuspendRunNext {
   std::experimental::coroutine_handle<> run;
@@ -36,9 +43,17 @@ struct SuspendRunNext {
     return false;
   }
   void await_resume() {}
+  template<class T>
   void await_suspend(
-    std::experimental::coroutine_handle<MethodTaskPromiseType> h
-  );
+    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<T>> h
+  ) {
+    if (run) {
+      // got to copy this or else we may be destroyed
+      auto r = run;
+      h.destroy();
+      r.resume();
+    }
+  }
 };
 
 struct MethodTaskPromiseType : ProcessTaskPromiseType {
@@ -63,13 +78,28 @@ struct MethodTaskPromiseType : ProcessTaskPromiseType {
     }
   }
   auto initial_suspend() { return std::experimental::suspend_never{}; }
+};
+
+template<>
+struct MethodTaskPromiseTypeWithReturn<void> : MethodTaskPromiseType
+{
+  MethodTask<void> get_return_object();
   void return_void() {}
-  MethodTask get_return_object();
+};
+
+template<class T>
+struct MethodTaskPromiseTypeWithReturn : MethodTaskPromiseType
+{
+  T t_;
+  void return_value(T t) {
+    t_ = std::move(t);
+  }
+  MethodTask<T> get_return_object();
 };
 
 class ProcessTask {
 public:
-  using promise_type = ProcessTaskPromiseType;
+  using promise_type = ProcessTaskPromiseTypeWithReturn;
   explicit ProcessTask(
     std::experimental::coroutine_handle<promise_type> coroutine)
     : coroutine_(coroutine) {}
@@ -96,33 +126,33 @@ private:
   std::experimental::coroutine_handle<promise_type> coroutine_ = {};
 };
 
-class MethodTask {
+template<class T>
+class MethodTaskBase {
 public:
-  using promise_type = MethodTaskPromiseType;
-  explicit MethodTask(
+  using promise_type = MethodTaskPromiseTypeWithReturn<T>;
+  explicit MethodTaskBase(
     std::experimental::coroutine_handle<promise_type> coroutine = {})
     : coroutine_(coroutine) {
   }
 
-  // these are used when you await on a method task
   bool await_ready() {
     if (!coroutine_) {
       return true;
-    } else if (coroutine_.done()) {
+    }
+    else if (coroutine_.done()) {
       // can await_ready have side effects?
       // not sure
       coroutine_.destroy();
       coroutine_ = {};
       return true;
-    } else if (!coroutine_.promise().waiting) {
+    }
+    else if (!coroutine_.promise().waiting) {
       return true;
     }
     return false;
   }
 
-  void await_resume() {}
-
-  void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseType>
+  void await_suspend(std::experimental::coroutine_handle<ProcessTaskPromiseTypeWithReturn>
                      parent) noexcept {
     coroutine_.promise().parent = &parent.promise();
 
@@ -132,7 +162,7 @@ public:
   }
 
   void await_suspend(
-    std::experimental::coroutine_handle<MethodTaskPromiseType> parent
+    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<T>> parent
   ) noexcept {
     auto& our_promise = coroutine_.promise();
     parent.promise().subCoroutineChild = &our_promise;
@@ -158,7 +188,54 @@ public:
     }
   }
 
-private:
+protected:
   std::experimental::coroutine_handle<promise_type> coroutine_;
 };
+
+template<>
+class MethodTask<void> : public MethodTaskBase<void> {
+public:
+  using MethodTaskBase::MethodTaskBase;
+  void await_resume() {
+  }
+};
+
+template<class T>
+class MethodTask : public MethodTaskBase<T> {
+public:
+  using MethodTaskBase::MethodTaskBase;
+
+  MethodTask(T t) : t_(std::move(t)) {}
+  T t_;
+
+  T await_resume() {
+    return std::move(t_);
+  }
+
+  bool await_ready() {
+    if (!coroutine_) {
+      return true;
+    }
+    else if (coroutine_.done()) {
+      // can await_ready have side effects?
+      // not sure
+      t_ = std::move(coroutine_.promise().t_);
+      coroutine_.destroy();
+      coroutine_ = {};
+      return true;
+    }
+    else if (!coroutine_.promise().waiting) {
+      return true;
+    }
+    return false;
+  }
+};
+
+template<class T>
+MethodTask<T> MethodTaskPromiseTypeWithReturn<T>::get_return_object() {
+  return MethodTask<T>(
+    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<T>>::from_promise(
+      *this));
+}
+
 }

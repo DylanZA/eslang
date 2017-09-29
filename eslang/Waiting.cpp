@@ -2,15 +2,8 @@
 #include "ProcessTask.h"
 
 namespace s {
-
 void IWaiting::await_suspend(
-    std::experimental::coroutine_handle<MethodTaskPromiseType>
-        handle) noexcept {
-  handle.promise().waiting = this;
-}
-
-void IWaiting::await_suspend(
-    std::experimental::coroutine_handle<ProcessTaskPromiseType>
+    std::experimental::coroutine_handle<ProcessTaskPromiseTypeWithReturn>
         handle) noexcept {
   handle.promise().waiting = this;
 }

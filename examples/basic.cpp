@@ -106,15 +106,15 @@ class MethodExample : public Process {
 public:
   using Process::Process;
 
-  static MethodTask subfn(Process* parent, int i) {
+  static MethodTask<> subfn(Process* parent, int i) {
     LOG(INFO) << "Start sleep " << i;
     co_await parent->sleep(std::chrono::milliseconds(1000 + i * 100));
     LOG(INFO) << "Done sleep " << i;
   }
 
-  static MethodTask fn(Process* parent, TSendAddress<int> to_send, int i) {
+  static MethodTask<> fn(Process* parent, TSendAddress<int> to_send, int i) {
     LOG(INFO) << "Start sleep";
-    std::vector<MethodTask> subs;
+    std::vector<MethodTask<>> subs;
     for (int i = 3; i >= 0; i--) {
       subs.push_back(subfn(parent, i));
     }
@@ -146,7 +146,7 @@ public:
     Method(ProcessArgs a, std::shared_ptr<bool> b)
         : Process(std::move(a)), b(b) {}
 
-    MethodTask runSub() {
+    MethodTask<> runSub() {
       auto mv_b = std::move(b);
       SCOPE_EXIT {
         *mv_b = true;

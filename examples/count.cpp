@@ -45,8 +45,8 @@ class MethodCounter : public Process {
 public:
   int const kMax;
   MethodCounter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
-
-  MethodTask subRun(int n,int& out) {
+  
+  MethodTask<void> subRun(int n,int& out) {
     if (n > 0) {
       co_await subRun(n - 1, out);
       ++out;
@@ -54,17 +54,26 @@ public:
     co_return;
   }
 
-  MethodTask doNothingFn() {
-    return MethodTask{};
+  MethodTask<int> retIntCoro(int i) {
+    co_return i;
   }
 
-  MethodTask doNothingCoro() {
+  MethodTask<int> retIntFn(int i) {
+    return i;
+  }
+
+  MethodTask<> doNothingCoro() {
     co_return;
+  }
+
+  MethodTask<> doNothingFn() {
+    return MethodTask<>{};
   }
 
   ProcessTask run() {
     co_await doNothingFn();
     co_await doNothingCoro();
+    LOG(INFO) << "Got " << co_await retIntCoro(5) << " and " << co_await retIntFn(5);
     int our_value = 0;
     co_await subRun(kMax, our_value); 
     LOG(INFO) << "Counted to " << our_value << " wanted " << kMax;

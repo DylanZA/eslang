@@ -3,32 +3,18 @@
 
 namespace s {
 
-ProcessTask ProcessTaskPromiseType::get_return_object() {
+ProcessTask ProcessTaskPromiseTypeWithReturn::get_return_object() {
   return ProcessTask(
-      std::experimental::coroutine_handle<ProcessTaskPromiseType>::from_promise(
+      std::experimental::coroutine_handle<ProcessTaskPromiseTypeWithReturn>::from_promise(
           *this));
 }
 
 ProcessTaskPromiseType::~ProcessTaskPromiseType() {
   if (subCoroutineChild) {
-    std::experimental::coroutine_handle<MethodTaskPromiseType>::
+    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<>>::
         from_promise(
-            *static_cast<MethodTaskPromiseType*>(subCoroutineChild))
+            *static_cast<MethodTaskPromiseTypeWithReturn<>*>(subCoroutineChild))
             .destroy();
-  }
-}
-
-void SuspendRunNext::await_suspend(
-  std::experimental::coroutine_handle<MethodTaskPromiseType> h
-) {
-  // got to copy this or else we may be destroyed
-  if (run) {
-    auto r = run;
-    h.destroy();
-    r.resume();
-  }
-  else {
-    //h.destroy();
   }
 }
 
@@ -41,14 +27,17 @@ MethodTaskPromiseType* MethodTaskPromiseType::methodTaskParentPromise() {
 std::experimental::coroutine_handle<> MethodTaskPromiseType::parentHandle() {
   ESLANGREQUIRE(parent, "No parent");
   if (parentIsMethod) {
-    return std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(methodTaskParentPromise());
+    return std::experimental::coroutine_handle<MethodTaskPromiseType>::from_promise(
+      *methodTaskParentPromise()
+    );
   }
   return std::experimental::coroutine_handle<ProcessTaskPromiseType>::from_promise(*parent);
 }
 
-MethodTask MethodTaskPromiseType::get_return_object() {
-  return MethodTask(std::experimental::coroutine_handle<
-                        MethodTaskPromiseType>::from_promise(*this));
+MethodTask<void> MethodTaskPromiseTypeWithReturn<>::get_return_object() {
+  return MethodTask<void>(
+    std::experimental::coroutine_handle<MethodTaskPromiseTypeWithReturn<void>>::from_promise(
+      *this));
 }
 
 bool ProcessTask::resume() {
