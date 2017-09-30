@@ -32,6 +32,7 @@ find_package(OpenSSL MODULE REQUIRED)
 
 find_package(Boost COMPONENTS context system filesystem chrono thread iostreams date_time REQUIRED)
 
+
 set(ESLANG_BASE_LIBS
 	${LIBGLOG_LIBRARY}
 	${LIBGFLAGS_LIBRARY}
@@ -54,8 +55,15 @@ include_directories(${LIBGLOG_INCLUDE_DIR})
 
 add_subdirectory(eslang)
 add_subdirectory(eslang_io)
+set(ESLANG_LIBS eslang eslang_io)
 set (EXAMPLES basic tcp count send_back_pressure)
 foreach(EXAMPLE ${EXAMPLES})
   add_executable (example_${EXAMPLE} examples/${EXAMPLE}.cpp)
-  target_link_libraries(example_${EXAMPLE} eslang eslang_io)
+  target_link_libraries(example_${EXAMPLE} ${ESLANG_LIBS})
 endforeach(EXAMPLE)
+
+find_package(gtest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIR})
+file(GLOB test_files "tests/*.cpp"  "tests/*.h")
+add_executable(eslang_test ${test_files})
+target_link_libraries(eslang_test ${GTEST_LIBRARY} ${ESLANG_LIBS})
