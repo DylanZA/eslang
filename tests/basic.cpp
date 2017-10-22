@@ -5,6 +5,7 @@
 #include "TestCommon.h"
 #include <eslang/Context.h>
 #include <folly/Conv.h>
+#include <folly/ScopeGuard.h>
 
 namespace s {
 
@@ -70,7 +71,9 @@ public:
   ProcessTask run() {
     auto now = std::chrono::steady_clock::now();
     co_await sleep(s_);
-    ASSERT_TRUE(std::chrono::steady_clock::now() - now >= s_);
+    auto since = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - now);
+    ASSERT_GE(since.count(), s_.count());
     co_return;
   }
 };

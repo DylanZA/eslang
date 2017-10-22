@@ -32,7 +32,7 @@ MethodTask<void> MethodTaskPromiseTypeWithReturn<>::get_return_object() {
 }
 
 bool ProcessTask::resume() {
-  PromiseTypeBase* child =  coroutine_.promise().subCoroutineChild;
+  PromiseTypeBase* child = coroutine_.promise().subCoroutineChild;
   while (child && child->subCoroutineChild) {
     child = child->subCoroutineChild;
   }

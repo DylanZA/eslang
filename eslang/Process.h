@@ -96,8 +96,7 @@ public:
 
   template <class... TSlots>
   WaitingTimeout sleep(std::chrono::milliseconds time) {
-    TimePoint t = now() + time;
-    return WaitingTimeout(t);
+    return WaitingTimeout(time);
   }
 
   template <class... TSlots>

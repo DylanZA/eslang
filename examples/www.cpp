@@ -9,7 +9,8 @@
 namespace s {
 
 class ExampleWwwHandler : public Www::Server::IHandler {
-  MethodTask<Www::Response> getResponse(Process* proc, Www::Request const& req) override {
+  MethodTask<Www::Response> getResponse(Process* proc,
+                                        Www::Request const& req) override {
     Www::Response resp{};
     LOG(INFO) << "Received " << req.toString();
     if (req.message.target().find("favicon") != std::string::npos) {
@@ -24,11 +25,12 @@ class ExampleWwwHandler : public Www::Server::IHandler {
     co_await proc->sleep(std::chrono::milliseconds((int)(sleep * 1000)));
     LOG(INFO) << "Sleep " << sleep << "s done";
     r.result(beast::http::status::ok);
-    r.body = folly::to<std::string>("Hello, world! from ", std::string(req.message.target()), " slept ", sleep);
+    r.body = folly::to<std::string>("Hello, world! from ",
+                                    std::string(req.message.target()),
+                                    " slept ", sleep);
     if (req.message.target().find("chunk") != std::string::npos) {
       r.chunked(true);
-    }
-    else {
+    } else {
       r.prepare_payload();
     }
     co_return resp;
@@ -50,7 +52,8 @@ int main(int argc, char** argv) {
   folly::init(&argc, &argv);
   s::Context c;
   s::Tcp::ListenerOptions listener_options(12345);
-  c.spawn<s::Www::Server>(std::make_unique<s::ExampleWwwHandler>(), listener_options);
+  c.spawn<s::Www::Server>(std::make_unique<s::ExampleWwwHandler>(),
+                          listener_options);
   c.run();
   return 0;
 }

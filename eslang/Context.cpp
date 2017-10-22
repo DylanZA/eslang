@@ -8,7 +8,8 @@ TimePoint Context::now() const { return std::chrono::steady_clock::now(); }
 
 Context::RunningProcess::RunningProcess(Pid pid, std::unique_ptr<Process> proc,
                                         ProcessTask t, Context* parent)
-    : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent) {
+    : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent),
+      timer(parent->ioService()) {
   if (task.waiting()) {
     ESLANGEXCEPT("Should not have a waiting ptr now");
   }
@@ -21,7 +22,7 @@ void Context::RunningProcess::resume() {
     }
 
     // cleanup old waiting things:
-    cancelTimeout();
+    timer.cancel();
     try {
       if (task.waiting()) {
         if (auto* p = task.waiting()->wakeOnFuture()) {
@@ -43,19 +44,18 @@ void Context::RunningProcess::resume() {
     if (task.waiting()->isReadyForResume()) {
       parent->queueResume(pid, resumes);
     } else {
-      if (task.waiting()->wakeOnTime()) {
-        auto now = parent->now();
-        if (*task.waiting()->wakeOnTime() > now) {
-          auto const wait =
-              std::chrono::duration_cast<std::chrono::milliseconds>(
-                  *task.waiting()->wakeOnTime() - now);
-          parent->wheelTimer_->scheduleTimeout(this, wait);
-        } else {
-          parent->queueResume(pid, resumes);
-        }
+      if (task.waiting()->sleepFor()) {
+        timer.expires_from_now(boost::posix_time::milliseconds(
+            task.waiting()->sleepFor()->count()));
+        timer.async_wait([this](const boost::system::error_code& error) {
+          if (error == boost::asio::error::operation_aborted) {
+            return;
+          }
+          this->resume();
+        });
       }
       if (auto* promise = task.waiting()->wakeOnFuture()) {
-        promise->setContinuation(parent->eventBase(),
+        promise->setContinuation(parent->ioService(),
                                  [ this, resumes = this->resumes ]() {
                                    if (this->resumes == resumes) {
                                      resume();
@@ -79,8 +79,6 @@ void Context::RunningProcess::send(SendAddress s, MessageBase m) {
     resume();
   }
 }
-
-void Context::RunningProcess::timeoutExpired() noexcept { resume(); }
 
 std::vector<std::unique_ptr<Context::RunningProcess>>::const_iterator
 Context::findProc(Pid p) const {
@@ -173,7 +171,11 @@ void Context::run() {
         queue_.pop_front();
         processQueueItem(std::move(i));
       } else {
-        eventBase_.loopOnce();
+        ioService_.run_one();
+        // make sure to flush the queue so that anything that we are about to
+        // kill, if it has timers, they will not be already on the queue
+        while (ioService_.poll())
+          ;
       }
       while (toDestroy_.size()) {
         auto m = std::move(toDestroy_.front());

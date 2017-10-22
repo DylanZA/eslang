@@ -3,13 +3,12 @@
 #include "Except.h"
 #include "Process.h"
 #include "Slot.h"
+#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/io_service.hpp>
 #include <deque>
 #include <map>
 #include <memory>
 #include <unordered_map>
-
-#include <folly/io/async/EventBase.h>
-#include <folly/io/async/HHWheelTimer.h>
 
 namespace s {
 class Context {
@@ -61,7 +60,7 @@ public:
   }
 
   // for now, processes don't move, so can keep event base pointers
-  folly::EventBase* eventBase() { return &eventBase_; }
+  boost::asio::io_service& ioService() { return ioService_; }
 
 private:
   friend class Process;
@@ -86,13 +85,11 @@ private:
     return a.pid;
   }
 
-  struct RunningProcess : public folly::HHWheelTimer::Callback {
+  struct RunningProcess {
     RunningProcess(Pid pid, std::unique_ptr<Process> proc, ProcessTask t,
                    Context* parent);
     void send(SendAddress s, MessageBase m);
     bool waitingFor(SlotId s) const;
-    void timeoutExpired() noexcept override;
-    void callbackCanceled() noexcept override {}
     void resume();
     bool dead = false;
     Pid pid;
@@ -100,6 +97,7 @@ private:
     ProcessTask task;
     Context* parent;
     uint64_t resumes = 0;
+    boost::asio::deadline_timer timer;
   };
 
   struct ToProcessItem {
@@ -121,8 +119,6 @@ private:
   std::deque<std::pair<std::unique_ptr<RunningProcess>, std::string>>
       toDestroy_;
   std::deque<ToProcessItem> queue_;
-  folly::EventBase eventBase_;
-  folly::HHWheelTimer::UniquePtr wheelTimer_{
-      folly::HHWheelTimer::newTimer(&eventBase_)};
+  boost::asio::io_service ioService_;
 };
 }

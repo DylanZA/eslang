@@ -38,12 +38,8 @@ private:
     unsigned char* data() { return data_.data(); }
     size_t size() const { return data_.size(); }
     size_t capacity() const { return data_.capacity(); }
-    void append(void* data, size_t len) {
-
-    }
-    void reserve(size_t n) {
-      data_.reserve(n);
-    }
+    void append(void* data, size_t len) {}
+    void reserve(size_t n) { data_.reserve(n); }
     friend void intrusive_ptr_add_ref(Buff* p) { ++p->refs_; }
     friend void intrusive_ptr_release(Buff* p) {
       if (--p->refs_ == 0)
@@ -52,7 +48,8 @@ private:
     Buff(void const* data, size_t len)
         : data_(static_cast<unsigned char const*>(data),
                 static_cast<unsigned char const*>(data) + len) {}
-    Buff(std::vector<unsigned char> data) : data_(std::move(data)) { }
+    Buff(std::vector<unsigned char> data) : data_(std::move(data)) {}
+
   private:
     std::vector<unsigned char> data_;
     uint32_t refs_ = 0;
@@ -67,14 +64,12 @@ private:
 struct BufferCollection {
   std::vector<Buffer> buffers;
   Buffer combine() const {
-    size_t len = std::accumulate(buffers.begin(), buffers.end(), size_t(0), [](size_t acc, Buffer const& b) -> size_t {
-      return acc + b.size();
-    });
+    size_t len = std::accumulate(
+        buffers.begin(), buffers.end(), size_t(0),
+        [](size_t acc, Buffer const& b) -> size_t { return acc + b.size(); });
     std::vector<unsigned char> v;
     v.reserve(len);
-    std::for_each(buffers.begin(),
-                  buffers.end(),
-                  [&](Buffer const& b) {
+    std::for_each(buffers.begin(), buffers.end(), [&](Buffer const& b) {
       v.insert(v.end(), b.data(), b.data() + b.size());
     });
     return Buffer::make(std::move(v));
@@ -112,10 +107,9 @@ struct StreamBatcher : NonMovable {
   Process* sender;
   Tcp::Socket socket;
   BufferCollection buffs;
-  StreamBatcher(Process* sender, Tcp::Socket socket) : sender(sender), socket(std::move(socket)) {}
-  void push(Buffer b) {
-    buffs.buffers.push_back(std::move(b));
-  }
+  StreamBatcher(Process* sender, Tcp::Socket socket)
+      : sender(sender), socket(std::move(socket)) {}
+  void push(Buffer b) { buffs.buffers.push_back(std::move(b)); }
 
   void clear() {
     if (buffs.buffers.size()) {
@@ -123,8 +117,6 @@ struct StreamBatcher : NonMovable {
     }
   }
 
-  ~StreamBatcher() {
-    clear();
-  }
+  ~StreamBatcher() { clear(); }
 };
 }

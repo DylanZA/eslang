@@ -1,6 +1,7 @@
 #pragma once
-#include <folly/futures/Future.h>
-#include <folly/futures/SharedPromise.h>
+#include <boost/asio/io_service.hpp>
+#include <folly/ExceptionWrapper.h>
+#include <folly/Function.h>
 
 namespace s {
 
@@ -35,20 +36,24 @@ public:
 
   bool isReady() { return set_; }
 
-  void setContinuation(folly::Executor* exec, folly::Func func) {
-    exec_ = std::make_pair(exec, std::move(func));
+  void setContinuation(boost::asio::io_service& io_service,
+                       folly::Function<void()> func) {
+    exec_ = std::make_pair(&io_service, std::move(func));
   }
 
 private:
   void set() {
     set_ = true;
     if (exec_) {
-      exec_->first->add(std::move(exec_->second));
+      // exec_->first.post(std::move(exec_->second));
+      // the worst part of asio is handlers must be copyable
+      exec_->first->post(std::move(exec_->second).asStdFunction());
       exec_.reset();
     }
   }
 
-  std::optional<std::pair<folly::Executor*, folly::Function<void()>>> exec_;
+  std::optional<std::pair<boost::asio::io_service*, folly::Function<void()>>>
+      exec_;
   bool set_ = false;
   std::optional<folly::exception_wrapper> exception_;
 };

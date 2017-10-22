@@ -56,39 +56,64 @@ public:
 
   MethodTask<int> retIntCoro(int i) { co_return i; }
 
-  MethodTask<int> retIntFn(int i) { return i; }
-
   MethodTask<> doNothingCoro() { co_return; }
 
-  MethodTask<> doNothingFn() { return MethodTask<>{}; }
-
   ProcessTask run() {
-    co_await doNothingFn();
     co_await doNothingCoro();
-    LOG(INFO) << "Got " << co_await retIntCoro(5) << " and "
-              << co_await retIntFn(5);
+    LOG(INFO) << "Got " << co_await retIntCoro(5);
     int our_value = 0;
     co_await subRun(kMax, our_value);
     LOG(INFO) << "Counted to " << our_value << " wanted " << kMax;
   }
 };
+
+class SleepProfiler : public Process {
+public:
+  int const kMax;
+  SleepProfiler(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
+
+  class Sleeper : public Process {
+  public:
+    TSendAddress<int> a;
+    Sleeper(ProcessArgs i, TSendAddress<int> a) : Process(std::move(i)), a(a){}
+    ProcessTask run() {
+      co_await sleep(std::chrono::milliseconds(1000));
+      co_await send(a, 1);
+    }
+  };
+
+  ProcessTask run() {
+    Slot<int> s(this);
+    for (int i = 0; i < kMax; ++i) {
+      spawn<Sleeper>(s.address());
+    }
+    for (int i = 0; i < kMax; ++i) {
+      co_await recv(s);
+    }
+    LOG(INFO) << "Counted to " << kMax;
+  }
+};
+
 }
 
 template <class T> void run(std::string type, int const k) {
+  LOG(INFO) << "----------------------"  << " start " << type;
   s::Context c;
   auto start = std::chrono::steady_clock::now();
   auto starter = c.spawn<T>(k);
   c.run();
   LOG(INFO) << "Took "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(
+            << 0.001 * std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::steady_clock::now() - start)
                    .count()
-            << "ms to count to " << k << " by spawning that many " << type;
+            << "s to count to " << k << " by spawning that many " << type;
+  LOG(INFO) << "----------------------" << " end " << type;
 }
 
 int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   folly::init(&argc, &argv);
+  run<s::SleepProfiler>("sleep profiler", 3000000);
   // submethods run on the same stack, so cannot have too many
   run<s::MethodCounter>("methods", 256);
   run<s::Counter>("processes", 5000000);

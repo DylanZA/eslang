@@ -241,10 +241,11 @@ public:
   ProcessTask run() {
     int count = 0;
     int const N = 10;
-    for co_await(int i : genInts(N)) {
+    for
+      co_await(int i : genInts(N)) {
         count++;
         LOG(INFO) << "Got " << i;
-   }
+      }
     EXPECT_EQ(N, count);
     co_return;
   }

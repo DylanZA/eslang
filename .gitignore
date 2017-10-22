@@ -2,3 +2,4 @@ build/
 dybuild.sh
 extinstalls/
 .vscode/
+buildrel

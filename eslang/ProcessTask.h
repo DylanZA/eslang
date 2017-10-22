@@ -1,7 +1,6 @@
 #pragma once
 #include <chrono>
 #include <experimental/coroutine>
-#include <folly/futures/Future.h>
 #include <optional>
 #include <vector>
 
@@ -175,7 +174,7 @@ struct MethodTaskPromiseTypeWithReturn : MethodTaskPromiseType {
 template <class T> struct YieldPromiseType : MethodTaskPromiseType {
   // todo: make this not an optional (just needed it as a quick hack for the
   // movable stuff)
-  folly::Optional<T> t_;
+  std::optional<T> t_;
 
   struct YieldSuspender {
     bool await_ready() { return false; }

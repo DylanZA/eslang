@@ -36,7 +36,7 @@ public:
     while (true) {
       auto new_sock = co_await recv(new_socket);
       VLOG(2) << "New SOCK" << new_sock.pid;
-      spawn<TcpEchoRunner>(std::move(new_sock));
+      spawnLink<TcpEchoRunner>(std::move(new_sock));
     }
   }
 };

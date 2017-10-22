@@ -23,19 +23,15 @@ void checkOrThrow(error_code& ec) {
   }
 }
 
-template<class T>
-Buffer makeBuffer(T buff) {
-  return Buffer::makeCopy(
-    boost::asio::buffer_cast<char const*>(buff),
-    boost::asio::buffer_size(buff));
+template <class T> Buffer makeBuffer(T buff) {
+  return Buffer::makeCopy(boost::asio::buffer_cast<char const*>(buff),
+                          boost::asio::buffer_size(buff));
 }
 
-template<class T>
-GenTask<Buffer> makeBuffersFromSequence(T seq) {
+template <class T> GenTask<Buffer> makeBuffersFromSequence(T seq) {
   for (auto buff : seq) {
-    co_yield Buffer::makeCopy(
-      boost::asio::buffer_cast<char const*>(buff),
-      boost::asio::buffer_size(buff));
+    co_yield Buffer::makeCopy(boost::asio::buffer_cast<char const*>(buff),
+                              boost::asio::buffer_size(buff));
   }
 }
 
@@ -45,17 +41,17 @@ public:
     error_code ec;
     do {
       boost::asio::buffer_copy(
-        currentRead_.prepare(data.size()),
-        boost::asio::const_buffer(data.data(), data.size()));
+          currentRead_.prepare(data.size()),
+          boost::asio::const_buffer(data.data(), data.size()));
       size_t read =
-        parser_->put(boost::asio::buffer(data.data(), data.size()), ec);
+          parser_->put(boost::asio::buffer(data.data(), data.size()), ec);
       currentRead_.consume(read);
       if (ec == http::error::need_more) {
         co_return;
       }
       checkOrThrow(ec);
       if (parser_->is_done()) {
-        co_yield Www::Request{ parser_->release() };
+        co_yield Www::Request{parser_->release()};
         parser_.reset();
         parser_.emplace();
       }
@@ -80,7 +76,7 @@ public:
   GenTask<Buffer> convert(Www::Response& response_in) {
     Www::Response response(std::move(response_in));
     http::response_serializer<http::string_body> serializer(
-      std::move(response.message));
+        std::move(response.message));
     std::vector<Buffer> buffs;
     error_code ec;
     SerializeVisitor visitor(buffs);
@@ -96,7 +92,8 @@ public:
   }
 
   GenTask<Buffer> convertHeaderOnly(Www::Response const& response) {
-    http::response_serializer<http::string_body> serializer(std::move(response.message));
+    http::response_serializer<http::string_body> serializer(
+        std::move(response.message));
     std::vector<Buffer> buffs;
     error_code ec;
     SerializeVisitor visitor(buffs);
@@ -122,7 +119,7 @@ private:
   // beast doesnt allow me to recreate parser without the optional trick.
   // SAD!
   std::optional<http::request_parser<http::string_body>> parser_{
-      http::request_parser<http::string_body>{} };
+      http::request_parser<http::string_body>{}};
 };
 }
 
@@ -130,12 +127,13 @@ class SessionRunner : public Process {
 public:
   Tcp::Socket s_;
   std::shared_ptr<Www::Server::IHandler> handler;
-  SessionRunner(ProcessArgs i, Tcp::Socket s, std::shared_ptr<Www::Server::IHandler> h)
-    : Process(std::move(i)), s_(std::move(s)), handler(std::move(h)) {
+  SessionRunner(ProcessArgs i, Tcp::Socket s,
+                std::shared_ptr<Www::Server::IHandler> h)
+      : Process(std::move(i)), s_(std::move(s)), handler(std::move(h)) {
     link(s.pid);
   }
 
-  Slot<Tcp::ReceiveData> recv{ this };
+  Slot<Tcp::ReceiveData> recv{this};
   ProcessTask run() {
     Tcp::initRecvSocket(this, s_, recv.address());
     WwwParser parser;
@@ -156,27 +154,34 @@ public:
         bool const chunked = resp.message.chunked();
         StreamBatcher sb(this, s_);
         if (!chunked) {
-          for co_await(auto buff : parser.convert(std::move(resp))) {
-            sb.push(std::move(buff));
-          }
+          for
+            co_await(auto buff : parser.convert(std::move(resp))) {
+              sb.push(std::move(buff));
+            }
         } else {
-          for co_await(auto buff : parser.convertHeaderOnly(resp)) {
-            sb.push(std::move(buff));
-          }
+          for
+            co_await(auto buff : parser.convertHeaderOnly(resp)) {
+              sb.push(std::move(buff));
+            }
           LOG(INFO) << "C";
-          for co_await(auto buff : handler->getChunked(this, req)) {
-            LOG(INFO) << "get buffer size " << buff.size();
-            auto chunk = beast::http::make_chunk(
-              boost::asio::const_buffers_1(buff.data(), buff.size()));
-            for co_await(auto b : makeBuffersFromSequence(chunk)) {
-              LOG(INFO) << "send buffer size " << b.size();
+          for
+            co_await(auto buff : handler->getChunked(this, req)) {
+              LOG(INFO) << "get buffer size " << buff.size();
+              auto chunk = beast::http::make_chunk(
+                  boost::asio::const_buffers_1(buff.data(), buff.size()));
+            for
+              co_await(auto b : makeBuffersFromSequence(chunk)) {
+                LOG(INFO) << "send buffer size " << b.size();
+                sb.push(std::move(b));
+              }
+            sb.clear();
+            }
+          for
+            co_await(
+                auto b
+                : makeBuffersFromSequence(beast::http::make_chunk_last())) {
               sb.push(std::move(b));
             }
-            sb.clear();
-          }
-          for co_await(auto b : makeBuffersFromSequence(beast::http::make_chunk_last())) {
-            sb.push(std::move(b));
-          }
         }
       }
     }
@@ -184,7 +189,7 @@ public:
 };
 
 ProcessTask Www::Server::run() {
-  Slot<Tcp::Socket> new_socket{ this };
+  Slot<Tcp::Socket> new_socket{this};
   Tcp::makeListener(this, new_socket.address(), options_);
   while (true) {
     auto new_sock = co_await recv(new_socket);
@@ -196,9 +201,12 @@ ProcessTask Www::Server::run() {
 class SimpleHandler : public Www::Server::IHandler {
 public:
   std::function<MethodTask<Www::Response>(Process*, Www::Request const&)> fn_;
-  SimpleHandler(std::function<MethodTask<Www::Response>(Process*, Www::Request const&)> fn) : fn_(std::move(fn)) {
-  }
-  MethodTask<Www::Response> getResponse(Process* p, Www::Request const& r) override {
+  SimpleHandler(
+      std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
+          fn)
+      : fn_(std::move(fn)) {}
+  MethodTask<Www::Response> getResponse(Process* p,
+                                        Www::Request const& r) override {
     return fn_(p, r);
   }
   virtual GenTask<Buffer> getChunked(Process*, Www::Request const&) override {
@@ -206,9 +214,9 @@ public:
   }
 };
 
-std::unique_ptr<Www::Server::IHandler> Www::Server::IHandler::makeSimple(std::function<MethodTask<Www::Response>(Process*, Www::Request const&)> fn) {
+std::unique_ptr<Www::Server::IHandler> Www::Server::IHandler::makeSimple(
+    std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
+        fn) {
   return std::make_unique<SimpleHandler>(std::move(fn));
 }
-
-
 }

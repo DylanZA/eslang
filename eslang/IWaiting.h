@@ -1,7 +1,6 @@
 #pragma once
 #include <chrono>
 #include <experimental/coroutine>
-#include <folly/futures/Future.h>
 #include <optional>
 #include <vector>
 
@@ -21,7 +20,9 @@ struct IWaiting {
     return nullptr;
   }
 
-  virtual std::optional<TimePoint> wakeOnTime() const { return {}; }
+  virtual std::optional<std::chrono::milliseconds> sleepFor() const {
+    return {};
+  }
 
   virtual EslangPromise* wakeOnFuture() { return nullptr; }
 

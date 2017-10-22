@@ -43,13 +43,15 @@ struct WaitOnFuture : IWaiting {
 };
 
 template <class TUnderlying> struct WithWaitingTimeout : TUnderlying {
-  TimePoint t_;
+  std::chrono::milliseconds t_;
 
   template <class... Args>
-  WithWaitingTimeout(TimePoint t, Args&&... args)
+  WithWaitingTimeout(std::chrono::milliseconds t, Args&&... args)
       : TUnderlying(std::forward<Args>(args)...), t_(t) {}
 
-  std::optional<TimePoint> wakeOnTime() const override { return t_; }
+  std::optional<std::chrono::milliseconds> sleepFor() const override {
+    return t_;
+  }
 };
 
 using WaitingTimeout = WithWaitingTimeout<WaitingAlways>;

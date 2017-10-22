@@ -1,35 +1,28 @@
 #include "Tcp.h"
-#include <folly/io/async/AsyncServerSocket.h>
-#include <folly/io/async/AsyncSocket.h>
+#include <boost/asio.hpp>
 #include <numeric>
 
 namespace s {
-
-struct SocketProcess : public Process,
-                       public folly::AsyncSocket::ReadCallback,
-                       public folly::AsyncSocket::WriteCallback {
-  int const fd;
+using namespace boost::asio;
+struct SocketProcess : public Process {
+  ip::tcp::socket socket;
   bool eof_ = false;
 
   EslangPromise p_;
   std::optional<folly::exception_wrapper> except_;
   Slot<Buffer> send_data{this};
-  Slot<BufferCollection> send_many_data{ this };
+  Slot<BufferCollection> send_many_data{this};
   Slot<TSendAddress<Tcp::ReceiveData>> init{this};
 
   std::optional<TSendAddress<Tcp::ReceiveData>> to_send;
 
-  SocketProcess(ProcessArgs i, int fd)
-      : Process(std::move(i)), fd(fd) {
-    VLOG(3) << "Socket " << fd << " created";
+  SocketProcess(ProcessArgs i, ip::tcp::socket socket)
+      : Process(std::move(i)), socket(std::move(socket)) {
+    VLOG(3) << "Socket " << socket.native_handle() << " created";
   }
 
-  ~SocketProcess() { VLOG(3) << pid() << ": ~SocketProcess fd=" << fd; }
-
-  char buff[16000];
-  void getReadBuffer(void** bufReturn, size_t* lenReturn) override {
-    *bufReturn = &buff;
-    *lenReturn = sizeof(buff);
+  ~SocketProcess() {
+    VLOG(3) << pid() << ": ~SocketProcess fd=" << socket.native_handle();
   }
 
   void checkExcept() {
@@ -40,6 +33,11 @@ struct SocketProcess : public Process,
 
   void setValue() { p_.setIfUnset(); }
 
+  void setError(boost::system::error_code const& ec) {
+    setException(std::runtime_error(
+        folly::to<std::string>("Listener threw ", ec.message())));
+  }
+
   template <class T> void setException(T const& e) {
     setValue();
     if (!except_) {
@@ -47,105 +45,102 @@ struct SocketProcess : public Process,
     }
   }
 
-  void readDataAvailable(size_t len) noexcept override {
-    VLOG(3) << pid() << ": Read " << len << " bytes";
-    if (len > 0 && to_send) {
-      // doesnt really work, if we have multiple calls
-      Tcp::ReceiveData r(pid(), Buffer::makeCopy(&buff, len));
-      send(*to_send, std::move(r));
-    }
+  char readBuff[16000];
+  void asyncRead() {
+    socket.async_read_some(
+        buffer(readBuff, sizeof(readBuff)),
+        [this](const boost::system::error_code& error, std::size_t bytes) {
+          if (error == error::operation_aborted) {
+            return;
+          }
+          if (error == error::eof) {
+            eof_ = true;
+            VLOG(3) << pid() << ": EOF";
+            setValue();
+            return;
+          }
+          if (error) {
+            setError(error);
+            return;
+          }
+          if (bytes > 0) {
+            send(*to_send,
+                 Tcp::ReceiveData(pid(), Buffer::makeCopy(&readBuff, bytes)));
+          }
+          asyncRead();
+        });
   }
 
-  bool isBufferMovable() noexcept override { return false; }
-
-  size_t maxBufferSize() const override {
-    return 64 * 1024; // 64K
-  }
-
-  void
-  readBufferAvailable(std::unique_ptr<folly::IOBuf> readBuf) noexcept override {
-    ESLANGEXCEPT("Unexpected");
-  }
-
-  void readEOF() noexcept override {
-    eof_ = true;
-    VLOG(3) << pid() << ": EOF";
-    setValue();
-  }
-
-  void readErr(const folly::AsyncSocketException& ex) noexcept override {
-    VLOG(3) << pid() << ": Read error " << ex.what();
-    setException(ex);
-  }
-
-  void writeSuccess() noexcept override {
-    // do we care?
-  }
-
-  void writeErr(size_t bytesWritten,
-                const folly::AsyncSocketException& ex) noexcept override {
-    VLOG(3) << "Write error " << ex.what();
-    setException(ex);
-  }
-
-  void write(folly::AsyncSocket::UniquePtr& socket, Buffer buff) {
-    Buffer* b = new Buffer(std::move(buff));
-    auto free_fn = [](void* buf, void* userData) {
-      delete reinterpret_cast<Buffer*>(userData);
-    };
-    socket->writeChain(this, folly::IOBuf::takeOwnership(
-      b->data(), b->size(), free_fn, b));
+  void write(Buffer buff) {
+    async_write(socket, buffer(buff.data(), buff.size()),
+                [buff, this](const boost::system::error_code& ec,
+                             std::size_t bytes_transferred) {
+                  if (ec == error::operation_aborted) {
+                    return;
+                  }
+                  if (ec) {
+                    setError(ec);
+                  }
+                });
   }
 
   ProcessTask run() {
-    folly::AsyncSocket::UniquePtr socket(
-        new folly::AsyncSocket(c_->eventBase(), fd));
     to_send = co_await recv(init);
-    socket->setReadCB(this);
-
+    asyncRead();
     while (!eof_) {
-      auto ret = co_await makeWithWaitingFuture(&p_, tryRecv(send_data, send_many_data));
+      auto ret = co_await makeWithWaitingFuture(
+          &p_, tryRecv(send_data, send_many_data));
       checkExcept();
       if (std::get<0>(ret)) {
-        write(socket, std::get<0>(ret).value());
+        write(std::get<0>(ret).value());
       } else if (std::get<1>(ret)) {
-        // windows doesn't do chains well unfortunately, one day we should use the chaining
-        write(socket, std::get<1>(ret).value().combine());
+        // windows doesn't do chains well unfortunately, one day we should use
+        // the chaining
+        write(std::get<1>(ret).value().combine());
       }
     }
   }
 };
 
-struct ListenerProcess : public Process,
-                         public folly::AsyncServerSocket::AcceptCallback {
+struct ListenerProcess : public Process {
   TSendAddress<Tcp::Socket> newSocket;
   uint32_t port;
   EslangPromise error_;
+  ip::tcp const protocol = ip::tcp::v4();
   ListenerProcess(ProcessArgs i, TSendAddress<Tcp::Socket> new_socket_address,
                   uint32_t port)
       : Process(std::move(i)), newSocket(std::move(new_socket_address)),
         port(port) {}
-
-  void acceptError(const std::exception& ex) noexcept override {
-    LOG(ERROR) << "Error " << ex.what();
-    error_.setException(ex);
+  void setException(boost::system::error_code const& ec) {
+    error_.setException(std::runtime_error(
+        folly::to<std::string>("Listener threw ", ec.message())));
   }
 
-  void
-  connectionAccepted(int fd,
-                     const folly::SocketAddress& clientAddr) noexcept override {
-    VLOG(3) << "New connection " << fd << " from " << clientAddr.describe();
-    send(newSocket, Tcp::Socket(spawn<SocketProcess>(fd)));
+  ip::tcp::socket next{c_->ioService()};
+  void asyncAccept(ip::tcp::acceptor& socket) {
+    socket.async_accept(
+        next, [this, &socket](const boost::system::error_code& ec) {
+          if (ec == error::operation_aborted) {
+            return;
+          }
+          if (ec) {
+            setException(ec);
+          } else {
+            send(newSocket, Tcp::Socket(spawn<SocketProcess>(std::move(next))));
+            next = ip::tcp::socket(c_->ioService());
+            asyncAccept(socket);
+          }
+        });
   }
-
   ProcessTask run() {
-    folly::AsyncServerSocket::UniquePtr socket(
-        new folly::AsyncServerSocket(c_->eventBase()));
-    socket->bind(port);
-    socket->listen(10000);
-    socket->addAcceptCallback(this, c_->eventBase());
-    VLOG(2) << "Listening on " << socket->getAddress().describe();
-    socket->startAccepting();
+    ip::tcp::acceptor socket(c_->ioService());
+    LOG(INFO) << "Bind to " << port;
+    socket.open(protocol);
+    socket.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+    socket.bind(ip::tcp::endpoint(protocol, port));
+    socket.listen(10000);
+    asyncAccept(socket);
+    VLOG(2) << "Listening on " << socket.local_endpoint();
     co_await WaitOnFuture(&error_);
   }
 };
@@ -169,5 +164,4 @@ void Tcp::send(Process* sender, Socket socket, Buffer data) {
 void Tcp::sendMany(Process* sender, Socket socket, BufferCollection data) {
   sender->send(socket.pid, &SocketProcess::send_many_data, std::move(data));
 }
-
 }

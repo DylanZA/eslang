@@ -42,6 +42,7 @@ This used to be an aboslute nightmare, but then I learnt about [vcpkg](https://g
 * install vcpkg somewhere
 * install (I think) folly and beast vcpkg things
 * Folly is broken sometimes on windows. I tend to keep my branch working, so if it does not compile you can use [it here: ](https://github.com/dylanza/folly) by overwriting the [appropriate file in vcpkg](https://github.com/Microsoft/vcpkg/tree/master/ports/folly).
+* You cannot use folly/futures on windows right now, as MSVC has a reserved keyword of await, which folly happens to use.
 * build as per vcpkg instructions
 
 ### Building on Linux

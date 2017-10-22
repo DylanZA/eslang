@@ -3,7 +3,7 @@
 #include <eslang/Context.h>
 #include <folly/Conv.h>
 #include <folly/init/Init.h>
-#include <iostream>
+#include <folly/ScopeGuard.h>
 
 namespace s {
 class ThrowingApp : public Process {
@@ -119,7 +119,7 @@ public:
       subs.push_back(subfn(parent, i));
     }
     LOG(INFO) << "Queued sleeps";
-    for (auto s : subs) {
+    for (auto&& s : subs) {
       co_await s;
     }
     LOG(INFO) << "Done sleeps";
