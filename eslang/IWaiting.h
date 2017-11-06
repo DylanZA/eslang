@@ -10,9 +10,9 @@
 
 namespace s {
 
-struct PromiseTypeBaseWithReturn;
+struct ProcessPromise;
 
-template <class T> struct MethodTaskPromiseTypeWithReturn;
+template <class T> struct MethodTaskPromiseWithReturn;
 
 struct IWaiting {
   virtual bool isReadyForResume() const { return false; }

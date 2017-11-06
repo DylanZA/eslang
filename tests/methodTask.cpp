@@ -48,6 +48,24 @@ public:
     co_await c;
   }
 };
+
+class MethodThrows : public Process {
+public:
+  using Process::Process;
+  LIFETIMECHECK;
+  MethodTask<int> throwCoro(int i) {
+    LIFETIMECHECK;
+    co_await WaitingYield{};
+    ESLANGEXCEPT();
+    co_return i;
+  }
+
+  ProcessTask run() {
+    LIFETIMECHECK;
+    co_await throwCoro(5);
+    FAIL();
+  }
+};
 }
 
 template <class T> void run() {
@@ -60,3 +78,4 @@ template <class T> void run() {
 TEST(MethodTask, Counter) { run<s::MethodCounter>(); }
 
 TEST(MethodTask, Basic) { run<s::MethodBasic>(); }
+TEST(MethodTask, Throws) { run<s::MethodThrows>(); }

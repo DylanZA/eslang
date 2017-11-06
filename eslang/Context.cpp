@@ -10,9 +10,6 @@ Context::RunningProcess::RunningProcess(Pid pid, std::unique_ptr<Process> proc,
                                         ProcessTask t, Context* parent)
     : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent),
       timer(parent->ioService()) {
-  if (task.waiting()) {
-    ESLANGEXCEPT("Should not have a waiting ptr now");
-  }
 }
 
 void Context::RunningProcess::resume() {
@@ -24,13 +21,13 @@ void Context::RunningProcess::resume() {
     // cleanup old waiting things:
     timer.cancel();
     try {
-      if (task.waiting()) {
-        if (auto* p = task.waiting()->wakeOnFuture()) {
+      if (lastWaiting) {
+        if (auto* p = lastWaiting->wakeOnFuture()) {
           p->process();
         }
       }
       ++resumes;
-      task.resume();
+      lastWaiting = task.resume();
       if (task.done()) {
         parent->addtoDestroy(pid, {});
         return;
@@ -41,12 +38,12 @@ void Context::RunningProcess::resume() {
       return;
     }
 
-    if (task.waiting()->isReadyForResume()) {
+    if (lastWaiting->isReadyForResume()) {
       parent->queueResume(pid, resumes);
     } else {
-      if (task.waiting()->sleepFor()) {
+      if (lastWaiting->sleepFor()) {
         timer.expires_from_now(boost::posix_time::milliseconds(
-            task.waiting()->sleepFor()->count()));
+          lastWaiting->sleepFor()->count()));
         timer.async_wait([this](const boost::system::error_code& error) {
           if (error == boost::asio::error::operation_aborted) {
             return;
@@ -54,7 +51,7 @@ void Context::RunningProcess::resume() {
           this->resume();
         });
       }
-      if (auto* promise = task.waiting()->wakeOnFuture()) {
+      if (auto* promise = lastWaiting->wakeOnFuture()) {
         promise->setContinuation(parent->ioService(),
                                  [ this, resumes = this->resumes ]() {
                                    if (this->resumes == resumes) {
@@ -69,7 +66,7 @@ void Context::RunningProcess::resume() {
 }
 
 bool Context::RunningProcess::waitingFor(SlotId s) const {
-  return task.waiting() && task.waiting()->isWaiting(s);
+  return lastWaiting && lastWaiting->isWaiting(s);
 }
 
 void Context::RunningProcess::send(SendAddress s, MessageBase m) {

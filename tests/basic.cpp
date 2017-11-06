@@ -125,7 +125,7 @@ public:
   LIFETIMECHECK;
   static MethodTask<> subfn(Process* parent, int i) {
     LOG(INFO) << "Start sleep " << i;
-    co_await parent->sleep(std::chrono::milliseconds(1000 + i * 100));
+    co_await parent->sleep(std::chrono::milliseconds(100 + i * 100));
     LOG(INFO) << "Done sleep " << i;
   }
 

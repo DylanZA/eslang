@@ -38,8 +38,7 @@ public:
   }
 
   template <class T, class... Args> Pid spawn(Args... args) {
-    ProcessArgs a(nextPid());
-    return spawnArgs<T, Args...>(std::move(a), std::forward<Args>(args)...);
+    return spawnArgs<T, Args...>(ProcessArgs(nextPid()), std::forward<Args>(args)...);
   }
 
   template <class T, class Fn, class... Args>
@@ -73,9 +72,6 @@ private:
     a.c = this;
     auto p = std::make_unique<T>(a, std::forward<Args>(args)...);
     auto res = p->run();
-    if (res.waiting()) {
-      ESLANGEXCEPT("Expected waiting to be null");
-    }
     if (res.done()) {
       ESLANGEXCEPT("Expected done to be false");
     }
@@ -95,6 +91,7 @@ private:
     Pid pid;
     std::unique_ptr<Process> process;
     ProcessTask task;
+    IWaiting* lastWaiting = nullptr;
     Context* parent;
     uint64_t resumes = 0;
     boost::asio::deadline_timer timer;
