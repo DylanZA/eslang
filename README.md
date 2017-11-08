@@ -15,7 +15,7 @@ There are a couple of examples (in the examples/ directory) that I've written, a
 
 So many right now:
 
-* No unit tests
+* Not enough unit tests
 * I haven't actually tested it properly (valgrind)
 * The API changes on my whims
 

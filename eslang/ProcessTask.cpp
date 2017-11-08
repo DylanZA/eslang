@@ -3,6 +3,40 @@
 
 namespace s {
 
+namespace {
+void updateProcessPromise(PromiseBase* at,
+                          ProcessPromise* process_promise) noexcept {
+  // need to propogate processPromise downward
+  // this is the first time we have suspended all the way to the context, so
+  // make sure the topmost process knows what to resume next also
+  do {
+    at->processPromise = process_promise;
+    // make sure we know what to resume next
+    process_promise->nextChild = at;
+
+    at = at->subCoroutineChild;
+  } while (at);
+}
+} // namespace
+
+void updateSuspend(ProcessPromise& parent,
+                   MethodTaskPromise& our_promise) noexcept {
+  our_promise.parent = &parent;
+  parent.subCoroutineChild = &our_promise;
+  if (!our_promise.processPromise) {
+    updateProcessPromise(&our_promise, &parent);
+  }
+}
+
+void updateSuspend(MethodTaskPromise& parent_promise,
+                   MethodTaskPromise& our_promise) noexcept {
+  our_promise.parent = &parent_promise;
+  parent_promise.subCoroutineChild = &our_promise;
+  if (!our_promise.processPromise && parent_promise.processPromise) {
+    updateProcessPromise(&our_promise, parent_promise.processPromise);
+  }
+}
+
 ProcessTask ProcessPromise::get_return_object() {
   return ProcessTask(
       std::experimental::coroutine_handle<ProcessPromise>::from_promise(*this));

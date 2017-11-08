@@ -135,13 +135,12 @@ void Context::addtoDestroy(Pid p, std::string s) {
 }
 
 void Context::queueResume(Pid p, uint64_t resumes) {
-  queue_.emplace_back(p);
-  queue_.back().resume = resumes;
+  queue_.emplace_back(p).resume = resumes;
 }
 
 void Context::queueSend(SendAddress a, MessageBase m) {
-  queue_.emplace_back(a.pid());
-  queue_.back().message = std::make_pair(std::move(a), std::move(m));
+  queue_.emplace_back(a.pid()).message =
+      std::make_pair(std::move(a), std::move(m));
 }
 
 void Context::processQueueItem(ToProcessItem i) {

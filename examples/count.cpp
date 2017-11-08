@@ -115,9 +115,9 @@ template <class T> void run(std::string type, int const k) {
 int main(int argc, char** argv) {
   FLAGS_stderrthreshold = 0;
   folly::init(&argc, &argv);
-  run<s::SleepProfiler>("sleep profiler", 3000000);
+  // run<s::SleepProfiler>("sleep profiler", 3000000);
   // submethods run on the same stack, so cannot have too many
-  run<s::MethodCounter>("methods", 256);
+  // run<s::MethodCounter>("methods", 256);
   run<s::Counter>("processes", 5000000);
   return 0;
 }

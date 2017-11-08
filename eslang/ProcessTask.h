@@ -8,6 +8,9 @@
 #include "Except.h"
 #include <variant>
 
+/// This file holds all the promises, and coroutine related nonsense, as well as
+/// the definition of a process (which relies on it all)
+
 namespace s {
 
 struct IWaiting;
@@ -96,38 +99,11 @@ struct SuspendRunNext {
   }
 };
 
-inline void updateProcessPromise(PromiseBase* at,
-                                 ProcessPromise* process_promise) noexcept {
-  // need to propogate processPromise downward
-  // this is the first time we have suspended all the way to the context, so
-  // make sure the topmost process knows what to resume next also
-  do {
-    at->processPromise = process_promise;
-    // make sure we know what to resume next
-    process_promise->nextChild = at;
-
-    at = at->subCoroutineChild;
-  } while (at);
-}
-
-template <class T>
-void updateSuspend(ProcessPromise& parent, T& our_promise) noexcept {
-  our_promise.parent = &parent;
-  parent.subCoroutineChild = &our_promise;
-
-  if (!our_promise.processPromise) {
-    updateProcessPromise(&our_promise, &parent);
-  }
-}
-
-template <class T, class U>
-void updateSuspend(U& parent_promise, T& our_promise) noexcept {
-  our_promise.parent = &parent_promise;
-  parent_promise.subCoroutineChild = &our_promise;
-  if (!our_promise.processPromise && parent_promise.processPromise) {
-    updateProcessPromise(&our_promise, parent_promise.processPromise);
-  }
-}
+struct MethodTaskPromise;
+void updateSuspend(ProcessPromise& parent,
+                   MethodTaskPromise& our_promise) noexcept;
+void updateSuspend(MethodTaskPromise& parent_promise,
+                   MethodTaskPromise& our_promise) noexcept;
 
 struct MethodTaskPromise : PromiseBase {
   // hack, msvc cannot have a coroutine_handle<T> inside of T :(
@@ -371,4 +347,5 @@ template <class T> GenTask<T> GenPromise<T>::get_return_object() {
   return GenTask<T>(
       std::experimental::coroutine_handle<GenPromise<T>>::from_promise(*this));
 }
-}
+
+} // namespace s

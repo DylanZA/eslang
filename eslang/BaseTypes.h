@@ -17,6 +17,7 @@ public:
   NonMovable& operator=(NonMovable&&) = delete;
   NonMovable& operator=(NonMovable const&) = delete;
 };
+
 class MessageBase {
 public:
   class StorageBase {
@@ -38,9 +39,8 @@ public:
   MessageBase(MessageBase const&) = delete;
   MessageBase& operator=(MessageBase const&) = delete;
 
-  MessageBase(std::unique_ptr<StorageBase> data) : storage_(std::move(data)) {}
-
 protected:
+  MessageBase(std::unique_ptr<StorageBase> data) : storage_(std::move(data)) {}
   std::unique_ptr<StorageBase> storage_;
 };
 
