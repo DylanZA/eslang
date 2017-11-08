@@ -4,8 +4,8 @@
 namespace s {
 
 ProcessTask ProcessPromise::get_return_object() {
-  return ProcessTask(std::experimental::coroutine_handle<
-                     ProcessPromise>::from_promise(*this));
+  return ProcessTask(
+      std::experimental::coroutine_handle<ProcessPromise>::from_promise(*this));
 }
 
 MethodTaskPromise* MethodTaskPromise::methodTaskParentPromise() {
@@ -26,11 +26,9 @@ MethodTask<void> MethodTaskPromiseWithReturn<>::get_return_object() {
 }
 
 IWaiting* ProcessTask::resume() {
-  PromiseBase* child = coroutine_.promise().subCoroutineChild;
-  while (child && child->subCoroutineChild) {
-    child = child->subCoroutineChild;
-  }
+  PromiseBase* child = coroutine_.promise().nextChild;
   coroutine_.promise().waiting = nullptr;
+  coroutine_.promise().nextChild = nullptr;
   // if these throw, the context will notice and clean up properly
   if (child) {
     child->getHandle().resume();
@@ -40,6 +38,9 @@ IWaiting* ProcessTask::resume() {
   if (coroutine_.atFinalSuspend()) {
     coroutine_.destroy();
     return nullptr;
+  }
+  if (coroutine_.promise().nextChild) {
+    return coroutine_.promise().nextChild->waiting;
   }
   return coroutine_.promise().waiting;
 }

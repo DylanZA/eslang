@@ -75,7 +75,7 @@ public:
   class Sleeper : public Process {
   public:
     TSendAddress<int> a;
-    Sleeper(ProcessArgs i, TSendAddress<int> a) : Process(std::move(i)), a(a){}
+    Sleeper(ProcessArgs i, TSendAddress<int> a) : Process(std::move(i)), a(a) {}
     ProcessTask run() {
       co_await sleep(std::chrono::milliseconds(1000));
       co_await send(a, 1);
@@ -93,21 +93,23 @@ public:
     LOG(INFO) << "Counted to " << kMax;
   }
 };
-
 }
 
 template <class T> void run(std::string type, int const k) {
-  LOG(INFO) << "----------------------"  << " start " << type;
+  LOG(INFO) << "----------------------"
+            << " start " << type;
   s::Context c;
   auto start = std::chrono::steady_clock::now();
   auto starter = c.spawn<T>(k);
   c.run();
   LOG(INFO) << "Took "
-            << 0.001 * std::chrono::duration_cast<std::chrono::milliseconds>(
-                   std::chrono::steady_clock::now() - start)
-                   .count()
+            << 0.001 *
+                   std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - start)
+                       .count()
             << "s to count to " << k << " by spawning that many " << type;
-  LOG(INFO) << "----------------------" << " end " << type;
+  LOG(INFO) << "----------------------"
+            << " end " << type;
 }
 
 int main(int argc, char** argv) {

@@ -2,8 +2,8 @@
 
 #include <eslang/Context.h>
 #include <folly/Conv.h>
-#include <folly/init/Init.h>
 #include <folly/ScopeGuard.h>
+#include <folly/init/Init.h>
 
 namespace s {
 class ThrowingApp : public Process {

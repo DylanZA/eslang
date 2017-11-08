@@ -1,5 +1,8 @@
 #include <eslang/Context.h>
+
 #include <folly/Conv.h>
+#include <folly/ScopeGuard.h>
+
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -250,6 +253,83 @@ public:
     co_return;
   }
 };
+
+class GenStackInversion : public Process {
+public:
+  using Process::Process;
+  LIFETIMECHECK;
+
+  GenTask<int> C(bool should_sleep) {
+    LIFETIMECHECK;
+    if (should_sleep) {
+      co_await sleep(std::chrono::milliseconds(1));
+    }
+    co_yield 1;
+  }
+
+  GenTask<int> B(bool should_sleep) {
+    LIFETIMECHECK;
+    int x = 0;
+    for
+      co_await(int i : C(true)) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+    EXPECT_EQ(1, x);
+    co_yield 1;
+    if (should_sleep) {
+      co_await sleep(std::chrono::milliseconds(1));
+    }
+    for
+      co_await(int i : C(false)) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+    EXPECT_EQ(2, x);
+    if (should_sleep) {
+      co_await sleep(std::chrono::milliseconds(1));
+    }
+    co_yield 1;
+  }
+
+  GenTask<int> A() {
+    LIFETIMECHECK;
+    int x = 0;
+    for
+      co_await(int i : B(true)) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+    EXPECT_EQ(2, x);
+    co_await sleep(std::chrono::milliseconds(1));
+    for
+      co_await(int i : B(false)) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+    EXPECT_EQ(4, x);
+    for
+      co_await(int i : B(true)) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+    EXPECT_EQ(6, x);
+    co_yield 1;
+    co_await sleep(std::chrono::milliseconds(1));
+    co_yield 1;
+  }
+
+  ProcessTask run() {
+    LIFETIMECHECK;
+    int x = 0;
+    SCOPE_EXIT { EXPECT_EQ(x, 2); };
+    for
+      co_await(int i : A()) {
+        EXPECT_EQ(1, i);
+        ++x;
+      }
+  }
+};
 }
 
 template <class T> void run() {
@@ -266,3 +346,4 @@ TEST(GenBasic, GenThrows) { run<s::GenThrows>(); }
 TEST(GenBasic, GenDestroy) { run<s::GenDestroy>(); }
 TEST(GenBasic, ForEach) { run<s::ForEach>(); }
 TEST(GenBasic, GenMultiTask) { run<s::GenMultiTask>(); }
+TEST(GenBasic, StackInversion) { run<s::GenStackInversion>(); }

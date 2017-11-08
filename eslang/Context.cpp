@@ -9,8 +9,7 @@ TimePoint Context::now() const { return std::chrono::steady_clock::now(); }
 Context::RunningProcess::RunningProcess(Pid pid, std::unique_ptr<Process> proc,
                                         ProcessTask t, Context* parent)
     : pid(pid), process(std::move(proc)), task(std::move(t)), parent(parent),
-      timer(parent->ioService()) {
-}
+      timer(parent->ioService()) {}
 
 void Context::RunningProcess::resume() {
   try {
@@ -42,8 +41,8 @@ void Context::RunningProcess::resume() {
       parent->queueResume(pid, resumes);
     } else {
       if (lastWaiting->sleepFor()) {
-        timer.expires_from_now(boost::posix_time::milliseconds(
-          lastWaiting->sleepFor()->count()));
+        timer.expires_from_now(
+            boost::posix_time::milliseconds(lastWaiting->sleepFor()->count()));
         timer.async_wait([this](const boost::system::error_code& error) {
           if (error == boost::asio::error::operation_aborted) {
             return;

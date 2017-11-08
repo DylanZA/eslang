@@ -73,7 +73,8 @@ public:
     co_await sleep(s_);
     auto since = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - now);
-    ASSERT_GE(since.count(), s_.count());
+    auto const kWindowsHack = 16;
+    ASSERT_GE(since.count() + kWindowsHack, s_.count());
     co_return;
   }
 };

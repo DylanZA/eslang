@@ -38,7 +38,8 @@ public:
   }
 
   template <class T, class... Args> Pid spawn(Args... args) {
-    return spawnArgs<T, Args...>(ProcessArgs(nextPid()), std::forward<Args>(args)...);
+    return spawnArgs<T, Args...>(ProcessArgs(nextPid()),
+                                 std::forward<Args>(args)...);
   }
 
   template <class T, class Fn, class... Args>

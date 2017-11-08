@@ -54,9 +54,12 @@ private:
   std::experimental::coroutine_handle<TPromise> h_ = {};
 };
 
+struct ProcessPromise;
 struct PromiseBase {
   IWaiting* waiting = nullptr;
   PromiseBase* subCoroutineChild = nullptr;
+  ProcessPromise* processPromise = nullptr;
+
   auto initial_suspend() { return std::experimental::suspend_always{}; }
   auto final_suspend() { return std::experimental::suspend_always{}; }
   virtual std::experimental::coroutine_handle<> getHandle() {
@@ -66,11 +69,12 @@ struct PromiseBase {
 };
 
 struct ProcessPromise : PromiseBase {
+  PromiseBase* nextChild = nullptr;
   void return_void() {}
   ProcessTask get_return_object();
   std::experimental::coroutine_handle<> getHandle() override {
-    return std::experimental::coroutine_handle<
-        ProcessPromise>::from_promise(*this);
+    return std::experimental::coroutine_handle<ProcessPromise>::from_promise(
+        *this);
   }
 };
 
@@ -92,32 +96,36 @@ struct SuspendRunNext {
   }
 };
 
+inline void updateProcessPromise(PromiseBase* at,
+                                 ProcessPromise* process_promise) noexcept {
+  // need to propogate processPromise downward
+  // this is the first time we have suspended all the way to the context, so
+  // make sure the topmost process knows what to resume next also
+  do {
+    at->processPromise = process_promise;
+    // make sure we know what to resume next
+    process_promise->nextChild = at;
+
+    at = at->subCoroutineChild;
+  } while (at);
+}
+
 template <class T>
 void updateSuspend(ProcessPromise& parent, T& our_promise) noexcept {
   our_promise.parent = &parent;
-
-  // propogate the IWaiting up the stack
-  parent.waiting = our_promise.waiting;
   parent.subCoroutineChild = &our_promise;
+
+  if (!our_promise.processPromise) {
+    updateProcessPromise(&our_promise, &parent);
+  }
 }
 
 template <class T, class U>
 void updateSuspend(U& parent_promise, T& our_promise) noexcept {
-  parent_promise.subCoroutineChild = &our_promise;
-
   our_promise.parent = &parent_promise;
-
-  IWaiting* waiting = our_promise.waiting;
-
-  // propogate the new IWaiting up the stack
-  // this is in case A calls B calls C then IWaiting gets to the top
-  // but when we resume C it waits again, now we have to re-propogate
-  // but we dont get the benefit of await_suspend being called
-  // could probably be done better, but for now api > performance
-  MethodTaskPromise* at = &our_promise;
-  while (at && at->parent) {
-    at->parent->waiting = waiting;
-    at = at->methodTaskParentPromise();
+  parent_promise.subCoroutineChild = &our_promise;
+  if (!our_promise.processPromise && parent_promise.processPromise) {
+    updateProcessPromise(&our_promise, parent_promise.processPromise);
   }
 }
 
@@ -131,13 +139,14 @@ struct MethodTaskPromise : PromiseBase {
   std::experimental::coroutine_handle<> parentHandle();
 
   std::experimental::coroutine_handle<> getHandle() override {
-    return std::experimental::coroutine_handle<
-        MethodTaskPromise>::from_promise(*this);
+    return std::experimental::coroutine_handle<MethodTaskPromise>::from_promise(
+        *this);
   }
 
   auto final_suspend() {
-    // make sure our parent knows that it's child is dead now,
-    // and then run the parent
+    // When our task is done, we invert the stack, and call our parent if we
+    // need to so that it continues running.
+    // we need to make sure our parent knows that it's child is dead now.
     if (parent) {
       parent->subCoroutineChild = nullptr;
       return SuspendRunNext{parentHandle()};
@@ -149,8 +158,7 @@ struct MethodTaskPromise : PromiseBase {
   auto initial_suspend() { return std::experimental::suspend_never{}; }
 };
 
-template <>
-struct MethodTaskPromiseWithReturn<void> : MethodTaskPromise {
+template <> struct MethodTaskPromiseWithReturn<void> : MethodTaskPromise {
   MethodTask<void> get_return_object();
   void return_void() {}
   std::experimental::coroutine_handle<> getHandle() override {
@@ -159,8 +167,7 @@ struct MethodTaskPromiseWithReturn<void> : MethodTaskPromise {
   }
 };
 
-template <class T>
-struct MethodTaskPromiseWithReturn : MethodTaskPromise {
+template <class T> struct MethodTaskPromiseWithReturn : MethodTaskPromise {
   T t_;
   void return_value(T t) { t_ = std::move(t); }
   MethodTask<T> get_return_object();
@@ -212,8 +219,8 @@ template <class T> struct GenPromise : MethodTaskPromise {
   auto initial_suspend() { return std::experimental::suspend_always{}; }
   auto final_suspend() { return std::experimental::suspend_always{}; }
   std::experimental::coroutine_handle<> getHandle() override {
-    return std::experimental::coroutine_handle<
-        GenPromise<T>>::from_promise(*this);
+    return std::experimental::coroutine_handle<GenPromise<T>>::from_promise(
+        *this);
   }
 };
 
@@ -241,11 +248,14 @@ public:
       : coroutine_(coroutine) {}
 
   bool await_ready() {
-    if (!coroutine_.hasValue() || coroutine_.atFinalSuspend() ||
-        !coroutine_.promise().waiting) {
+    if (!coroutine_.hasValue() || coroutine_.atFinalSuspend()) {
       return true;
     }
-    return false;
+    if (coroutine_.promise().subCoroutineChild ||
+        coroutine_.promise().waiting) {
+      return false;
+    }
+    return true;
   }
 
   template <class T>
@@ -266,8 +276,7 @@ public:
 };
 
 template <class T>
-class MethodTask
-    : public MethodTaskBase<T, MethodTaskPromiseWithReturn<T>> {
+class MethodTask : public MethodTaskBase<T, MethodTaskPromiseWithReturn<T>> {
 public:
   using MethodTaskBase::MethodTaskBase;
   T& await_resume() { return coroutine_.promise().t_; }
@@ -283,7 +292,13 @@ public:
     GenTask<T>* gen;
     NextAwaitable(GenTask<T>* gen) : gen(gen) {}
 
-    bool await_ready() { return gen->coroutine_.promise().waiting == nullptr; }
+    bool await_ready() {
+      if (gen->coroutine_.promise().subCoroutineChild ||
+          gen->coroutine_.promise().waiting) {
+        return false;
+      }
+      return true;
+    }
 
     bool await_resume() {
       // if we are done, then there are no more values left to yield
@@ -348,14 +363,12 @@ private:
 
 template <class T>
 MethodTask<T> MethodTaskPromiseWithReturn<T>::get_return_object() {
-  return MethodTask<T>(
-      std::experimental::coroutine_handle<
-          MethodTaskPromiseWithReturn<T>>::from_promise(*this));
+  return MethodTask<T>(std::experimental::coroutine_handle<
+                       MethodTaskPromiseWithReturn<T>>::from_promise(*this));
 }
 
 template <class T> GenTask<T> GenPromise<T>::get_return_object() {
   return GenTask<T>(
-      std::experimental::coroutine_handle<GenPromise<T>>::from_promise(
-          *this));
+      std::experimental::coroutine_handle<GenPromise<T>>::from_promise(*this));
 }
 }

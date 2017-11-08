@@ -1,5 +1,8 @@
 #include <eslang/Context.h>
+
 #include <folly/Conv.h>
+#include <folly/ScopeGuard.h>
+
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -66,6 +69,53 @@ public:
     FAIL();
   }
 };
+
+class MethodStackInversion : public Process {
+public:
+  using Process::Process;
+  LIFETIMECHECK;
+
+  MethodTask<> C(bool should_sleep, int& finished) {
+    LIFETIMECHECK;
+    if (should_sleep) {
+      co_await sleep(std::chrono::milliseconds(1));
+    }
+    ++finished;
+  }
+
+  MethodTask<> B(bool should_sleep, int& finished) {
+    LIFETIMECHECK;
+    int i = 0;
+    co_await C(true, i);
+    EXPECT_EQ(1, i);
+    if (should_sleep) {
+      co_await sleep(std::chrono::milliseconds(1));
+    }
+    co_await C(false, i);
+    EXPECT_EQ(2, i);
+    ++finished;
+  }
+
+  MethodTask<> A(int& finished) {
+    LIFETIMECHECK;
+    int i = 0;
+    co_await B(false, i);
+    EXPECT_EQ(1, i);
+    co_await sleep(std::chrono::milliseconds(1));
+    co_await B(true, i);
+    EXPECT_EQ(2, i);
+    co_await B(true, i);
+    EXPECT_EQ(3, i);
+    ++finished;
+  }
+
+  ProcessTask run() {
+    LIFETIMECHECK;
+    int i = 0;
+    SCOPE_EXIT { EXPECT_EQ(i, 1); };
+    co_await A(i);
+  }
+};
 }
 
 template <class T> void run() {
@@ -76,6 +126,6 @@ template <class T> void run() {
 }
 
 TEST(MethodTask, Counter) { run<s::MethodCounter>(); }
-
 TEST(MethodTask, Basic) { run<s::MethodBasic>(); }
 TEST(MethodTask, Throws) { run<s::MethodThrows>(); }
+TEST(MethodTask, StackInversion) { run<s::MethodStackInversion>(); }

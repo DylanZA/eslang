@@ -32,6 +32,9 @@ struct IWaiting {
   void
   await_suspend(std::experimental::coroutine_handle<TPromise> handle) noexcept {
     handle.promise().waiting = this;
+    if (handle.promise().processPromise) {
+      handle.promise().processPromise->nextChild = &handle.promise();
+    }
   }
 };
 

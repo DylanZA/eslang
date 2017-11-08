@@ -97,10 +97,6 @@ template <class... TTypes> struct WaitingMessages : IWaiting {
     return any_ready(std::index_sequence_for<TTypes...>{});
   }
 
-  template <class U> void await_suspend(U handle) noexcept {
-    handle.promise().waiting = this;
-  }
-
   template <size_t I>
   auto get_optional() -> std::optional<
       typename std::tuple_element<I, std::tuple<TTypes...>>::type> {
