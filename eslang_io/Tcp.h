@@ -1,6 +1,10 @@
 #include <boost/intrusive_ptr.hpp>
+#include <eslang/BaseTypes.h>
 #include <eslang/Context.h>
 #include <numeric>
+
+#include <boost/asio/ssl/context.hpp>
+#undef ERROR
 
 namespace s {
 
@@ -79,8 +83,18 @@ struct BufferCollection {
 class Tcp {
 public:
   struct ListenerOptions {
-    ListenerOptions(uint32_t port) : port(port) {}
+    explicit ListenerOptions(uint32_t port) : port(port) {}
     uint32_t port;
+    struct SslFiles {
+      std::string ca;
+      std::string cert;
+      std::string key;
+    };
+    std::optional<std::function<std::unique_ptr<boost::asio::ssl::context>(
+        boost::asio::io_service&)>>
+        sslContextFactory;
+    ListenerOptions withSslFiles(std::string ca, std::string cert,
+                                 std::string key) const;
   };
   struct Socket {
     explicit Socket(Pid p) : pid(std::move(p)) {}

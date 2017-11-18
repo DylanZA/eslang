@@ -19,7 +19,7 @@ std::string Www::Request::toString() const {
 namespace {
 void checkOrThrow(error_code& ec) {
   if (ec) {
-    ESLANGEXCEPT("Badd error code ", ec.message());
+    ESLANGEXCEPT("Bad error code:", ec.message());
   }
 }
 
@@ -137,20 +137,17 @@ public:
   ProcessTask run() {
     Tcp::initRecvSocket(this, s_, recv.address());
     WwwParser parser;
-    while (true) {
+    bool keep_alive = true;
+    while (keep_alive) {
       auto r = co_await Process::recv(recv);
       auto recv = parser.push(std::move(r.data));
       while (co_await recv.next()) {
         auto& req = recv.take();
+        keep_alive |= req.message.keep_alive();
         auto resp = co_await handler->getResponse(this, req);
-        if (req.message.keep_alive()) {
-          resp.message.keep_alive(true);
-        }
-        resp.message.set(http::field::server, "Eslang");
-        if (req.message.keep_alive()) {
-          resp.message.keep_alive(true);
-        }
         resp.message.version = req.message.version;
+        resp.message.set(http::field::server, "Eslang");
+        resp.message.keep_alive(req.message.keep_alive());
         bool const chunked = resp.message.chunked();
         StreamBatcher sb(this, s_);
         if (!chunked) {
@@ -174,12 +171,13 @@ public:
                 LOG(INFO) << "send buffer size " << b.size();
                 sb.push(std::move(b));
               }
-            sb.clear();
             }
+          beast::http::fields trailer;
           for
-            co_await(
-                auto b
-                : makeBuffersFromSequence(beast::http::make_chunk_last())) {
+            co_await(auto b
+                     : makeBuffersFromSequence(
+                         beast::http::make_chunk_last(trailer))) {
+              LOG(INFO) << "send last buffer size " << b.size();
               sb.push(std::move(b));
             }
         }

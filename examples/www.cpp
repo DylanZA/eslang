@@ -6,6 +6,12 @@
 #include <eslang/Context.h>
 #include <eslang_www/Www.h>
 
+DEFINE_string(ca, "", "ssl certificate authority");
+DEFINE_string(key, "", "ssl server key");
+DEFINE_string(cert, "", "ssl server cert");
+DEFINE_int32(plainPort, 12345, "server port");
+DEFINE_int32(sslPort, 12346, "ssl port");
+
 namespace s {
 
 class ExampleWwwHandler : public Www::Server::IHandler {
@@ -13,6 +19,7 @@ class ExampleWwwHandler : public Www::Server::IHandler {
                                         Www::Request const& req) override {
     Www::Response resp{};
     LOG(INFO) << "Received " << req.toString();
+    resp.message.set(beast::http::field::content_type, "text/plain");
     if (req.message.target().find("favicon") != std::string::npos) {
       resp.message.result(beast::http::status::not_found);
       resp.message.body = "404 not found";
@@ -20,7 +27,7 @@ class ExampleWwwHandler : public Www::Server::IHandler {
       co_return resp;
     }
     auto& r = resp.message;
-    double const sleep = folly::Random::randDouble01() * 5;
+    double const sleep = folly::Random::randDouble01() * 0.75;
     LOG(INFO) << "Sleep " << sleep << "s";
     co_await proc->sleep(std::chrono::milliseconds((int)(sleep * 1000)));
     LOG(INFO) << "Sleep " << sleep << "s done";
@@ -51,9 +58,18 @@ int main(int argc, char** argv) {
   FLAGS_v = 3;
   folly::init(&argc, &argv);
   s::Context c;
-  s::Tcp::ListenerOptions listener_options(12345);
-  c.spawn<s::Www::Server>(std::make_unique<s::ExampleWwwHandler>(),
-                          listener_options);
+  if (FLAGS_plainPort) {
+    s::Tcp::ListenerOptions listener_options(FLAGS_plainPort);
+    c.spawn<s::Www::Server>(std::make_unique<s::ExampleWwwHandler>(),
+                            listener_options);
+  }
+  if (FLAGS_sslPort) {
+    s::Tcp::ListenerOptions listener_options(FLAGS_sslPort);
+    listener_options =
+        listener_options.withSslFiles(FLAGS_ca, FLAGS_cert, FLAGS_key);
+    c.spawn<s::Www::Server>(std::make_unique<s::ExampleWwwHandler>(),
+                            listener_options);
+  }
   c.run();
   return 0;
 }
