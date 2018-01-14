@@ -1,8 +1,8 @@
 #include <eslang/Context.h>
 #include <eslang_io/Tcp.h>
 
-#include <beast/http/message.hpp>
-#include <beast/http/string_body.hpp>
+#include <boost/beast/http/message.hpp>
+#include <boost/beast/http/string_body.hpp>
 
 namespace s {
 
@@ -11,12 +11,12 @@ public:
   struct Session {};
 
   struct Request {
-    beast::http::request<beast::http::string_body> message;
+    boost::beast::http::request<boost::beast::http::string_body> message;
     std::string toString() const;
   };
 
   struct Response {
-    beast::http::response<beast::http::string_body> message;
+    boost::beast::http::response<boost::beast::http::string_body> message;
   };
 
   class Server : public Process {

@@ -1,10 +1,13 @@
 #include "Www.h"
-#include <beast.hpp>
+#include <boost/beast.hpp>
 #include <boost/asio/buffer.hpp>
+
+#include <eslang/Logging.h>
+
 
 namespace s {
 
-using namespace beast;
+using namespace boost::beast;
 
 std::string Www::Request::toString() const {
   std::stringstream ss;
@@ -41,17 +44,17 @@ public:
     error_code ec;
     do {
       boost::asio::buffer_copy(
-          currentRead_.prepare(data.size()),
-          boost::asio::const_buffer(data.data(), data.size()));
+        currentRead_.prepare(data.size()),
+        boost::asio::const_buffer(data.data(), data.size()));
       size_t read =
-          parser_->put(boost::asio::buffer(data.data(), data.size()), ec);
+        parser_->put(boost::asio::buffer(data.data(), data.size()), ec);
       currentRead_.consume(read);
       if (ec == http::error::need_more) {
         co_return;
       }
       checkOrThrow(ec);
       if (parser_->is_done()) {
-        co_yield Www::Request{parser_->release()};
+        co_yield Www::Request{ parser_->release() };
         parser_.reset();
         parser_.emplace();
       }
@@ -76,7 +79,7 @@ public:
   GenTask<Buffer> convert(Www::Response& response_in) {
     Www::Response response(std::move(response_in));
     http::response_serializer<http::string_body> serializer(
-        std::move(response.message));
+      std::move(response.message));
     std::vector<Buffer> buffs;
     error_code ec;
     SerializeVisitor visitor(buffs);
@@ -93,7 +96,7 @@ public:
 
   GenTask<Buffer> convertHeaderOnly(Www::Response const& response) {
     http::response_serializer<http::string_body> serializer(
-        std::move(response.message));
+      std::move(response.message));
     std::vector<Buffer> buffs;
     error_code ec;
     SerializeVisitor visitor(buffs);
@@ -119,7 +122,7 @@ private:
   // beast doesnt allow me to recreate parser without the optional trick.
   // SAD!
   std::optional<http::request_parser<http::string_body>> parser_{
-      http::request_parser<http::string_body>{}};
+      http::request_parser<http::string_body>{} };
 };
 }
 
@@ -129,11 +132,11 @@ public:
   std::shared_ptr<Www::Server::IHandler> handler;
   SessionRunner(ProcessArgs i, Tcp::Socket s,
                 std::shared_ptr<Www::Server::IHandler> h)
-      : Process(std::move(i)), s_(std::move(s)), handler(std::move(h)) {
+    : Process(std::move(i)), s_(std::move(s)), handler(std::move(h)) {
     link(s.pid);
   }
 
-  Slot<Tcp::ReceiveData> recv{this};
+  Slot<Tcp::ReceiveData> recv{ this };
   ProcessTask run() {
     Tcp::initRecvSocket(this, s_, recv.address());
     WwwParser parser;
@@ -145,7 +148,7 @@ public:
         auto& req = recv.take();
         keep_alive |= req.message.keep_alive();
         auto resp = co_await handler->getResponse(this, req);
-        resp.message.version = req.message.version;
+        resp.message.version(req.message.version());
         resp.message.set(http::field::server, "Eslang");
         resp.message.keep_alive(req.message.keep_alive());
         bool const chunked = resp.message.chunked();
@@ -153,33 +156,33 @@ public:
         if (!chunked) {
           for
             co_await(auto buff : parser.convert(std::move(resp))) {
-              sb.push(std::move(buff));
-            }
-        } else {
+            sb.push(std::move(buff));
+          }
+        }
+        else {
           for
             co_await(auto buff : parser.convertHeaderOnly(resp)) {
-              sb.push(std::move(buff));
-            }
-          LOG(INFO) << "C";
+            sb.push(std::move(buff));
+          }
           for
             co_await(auto buff : handler->getChunked(this, req)) {
-              LOG(INFO) << "get buffer size " << buff.size();
-              auto chunk = beast::http::make_chunk(
-                  boost::asio::const_buffers_1(buff.data(), buff.size()));
+            ESLOG(LL::INFO, "get buffer size ", buff.size());
+            auto chunk = http::make_chunk(
+              boost::asio::const_buffers_1(buff.data(), buff.size()));
             for
               co_await(auto b : makeBuffersFromSequence(chunk)) {
-                LOG(INFO) << "send buffer size " << b.size();
-                sb.push(std::move(b));
-              }
+              ESLOG(LL::INFO, "send buffer size ", b.size());
+              sb.push(std::move(b));
             }
-          beast::http::fields trailer;
+          }
+          http::fields trailer;
           for
             co_await(auto b
                      : makeBuffersFromSequence(
-                         beast::http::make_chunk_last(trailer))) {
-              LOG(INFO) << "send last buffer size " << b.size();
-              sb.push(std::move(b));
-            }
+                       http::make_chunk_last(trailer))) {
+            ESLOG(LL::INFO, "send last buffer size ", b.size());
+            sb.push(std::move(b));
+          }
         }
       }
     }
@@ -187,11 +190,11 @@ public:
 };
 
 ProcessTask Www::Server::run() {
-  Slot<Tcp::Socket> new_socket{this};
+  Slot<Tcp::Socket> new_socket{ this };
   Tcp::makeListener(this, new_socket.address(), options_);
   while (true) {
     auto new_sock = co_await recv(new_socket);
-    VLOG(2) << "New connect " << new_sock.pid;
+    ESLOG(LL::DEBUG, "New connect ", new_sock.pid);
     spawn<SessionRunner>(std::move(new_sock), handler_);
   }
 }
@@ -200,9 +203,9 @@ class SimpleHandler : public Www::Server::IHandler {
 public:
   std::function<MethodTask<Www::Response>(Process*, Www::Request const&)> fn_;
   SimpleHandler(
-      std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
-          fn)
-      : fn_(std::move(fn)) {}
+    std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
+    fn)
+    : fn_(std::move(fn)) {}
   MethodTask<Www::Response> getResponse(Process* p,
                                         Www::Request const& r) override {
     return fn_(p, r);
@@ -213,8 +216,8 @@ public:
 };
 
 std::unique_ptr<Www::Server::IHandler> Www::Server::IHandler::makeSimple(
-    std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
-        fn) {
+  std::function<MethodTask<Www::Response>(Process*, Www::Request const&)>
+  fn) {
   return std::make_unique<SimpleHandler>(std::move(fn));
 }
 }

@@ -25,24 +25,14 @@ I have some ideas for making it more multithreaded, but right now it only runs i
 
 ### Dependencies
 
-The dependencies right now are Facebook's [Folly](https://github.com/facebook/folly) library and [Boost Beast](https://github.com/boostorg/beast) . 
-Folly is unfortunately a bit complicated to build (mostly I suspect on Windows which is what I am working with).
-
-This has some other dependencies such as
-* GLog
-* GFlags
-* OpenSSL
-* double-conversioon
-* libevent
+The dependency right now to build Eslang is [Boost](https://www.boost.org) with OpenSSL, and to build the tests [Google Test](https://github.com/google/googletest).
 
 ### Building on Windows
 
 This used to be an aboslute nightmare, but then I learnt about [vcpkg](https://github.com/Microsoft/vcpkg).
 
 * install vcpkg somewhere
-* install (I think) folly and beast vcpkg things
-* Folly is broken sometimes on windows. I tend to keep my branch working, so if it does not compile you can use [it here: ](https://github.com/dylanza/folly) by overwriting the [appropriate file in vcpkg](https://github.com/Microsoft/vcpkg/tree/master/ports/folly).
-* You cannot use folly/futures on windows right now, as MSVC has a reserved keyword of await, which folly happens to use.
+* install (I think) boost and google test vcpkg things
 * build as per vcpkg instructions
 
 ### Building on Linux

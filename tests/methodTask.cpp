@@ -1,9 +1,6 @@
 #include <eslang/Context.h>
 
-#include <folly/Conv.h>
-#include <folly/ScopeGuard.h>
-
-#include <glog/logging.h>
+#include <eslang/Logging.h>
 #include <gtest/gtest.h>
 
 #include "TestCommon.h"
@@ -112,7 +109,9 @@ public:
   ProcessTask run() {
     LIFETIMECHECK;
     int i = 0;
-    SCOPE_EXIT { EXPECT_EQ(i, 1); };
+    ScopeRun sr([&] {
+      EXPECT_EQ(i, 1);
+    });
     co_await A(i);
   }
 };

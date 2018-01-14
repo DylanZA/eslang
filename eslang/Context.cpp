@@ -1,6 +1,7 @@
+#include "Logging.h"
+
 #include "Context.h"
 #include <algorithm>
-#include <folly/Conv.h>
 
 namespace s {
 
@@ -32,8 +33,8 @@ void Context::RunningProcess::resume() {
         return;
       }
     } catch (std::exception const& error) {
-      parent->addtoDestroy(
-          pid, folly::to<std::string>("Caught exception: ", error.what()));
+      parent->addtoDestroy(pid,
+                           concatString("Caught exception: ", error.what()));
       return;
     }
 
@@ -60,7 +61,7 @@ void Context::RunningProcess::resume() {
       }
     }
   } catch (std::exception const& e) {
-    LOG(FATAL) << "Uncaught " << e.what();
+    ESLOG(LL::FATAL, "Uncaught ", e.what());
   }
 }
 
@@ -103,7 +104,7 @@ Context::findProc(Pid p) {
 void Context::destroy(std::unique_ptr<RunningProcess> p, std::string reason) {
   auto const pid = p->pid;
   if (reason.size()) {
-    LOG(INFO) << "Kill " << pid << " for " << reason;
+    ESLOG(LL::INFO, "Kill ", pid, " for ", reason);
   }
 
   for (auto to_destroy : p->process->killOnDie()) {
@@ -175,12 +176,12 @@ void Context::run() {
       while (toDestroy_.size()) {
         auto m = std::move(toDestroy_.front());
         toDestroy_.pop_front();
-        VLOG(3) << "Destroy " << m.first->pid << " for reason " << m.second;
+        ESLOG(LL::TRACE, "Destroy ", m.first->pid, " for reason ", m.second);
         destroy(std::move(m.first), std::move(m.second));
       }
     }
   } catch (std::exception const& e) {
-    LOG(INFO) << "Uncaught exception " << e.what();
+    ESLOG(LL::INFO, "Uncaught exception ", e.what());
     throw;
   }
 }

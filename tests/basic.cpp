@@ -1,11 +1,8 @@
-#include <glog/logging.h>
-
 #include <gtest/gtest.h>
 
 #include "TestCommon.h"
 #include <eslang/Context.h>
-#include <folly/Conv.h>
-#include <folly/ScopeGuard.h>
+#include <eslang/Logging.h>
 
 namespace s {
 
@@ -13,21 +10,21 @@ class ThrowingApp : public Process {
 public:
   using Process::Process;
   LIFETIMECHECK;
-  Slot<std::string> message{this};
+  Slot<std::string> message{ this };
   ProcessTask run() {
     LIFETIMECHECK;
     auto m = co_await recv(message);
-    throw std::runtime_error(folly::to<std::string>("Throw ", m).c_str());
+    throw std::runtime_error(concatString("Throw ", m).c_str());
   }
 };
 
 class SenderApp : public Process {
 public:
   LIFETIMECHECK;
-  ~SenderApp() { LOG(INFO) << "Sender destruct"; }
+  ~SenderApp() { ESLOG(LL::INFO, "Sender destruct"); }
   TSendAddress<int> s_;
   SenderApp(ProcessArgs i, TSendAddress<int> s)
-      : Process(std::move(i)), s_(s) {}
+    : Process(std::move(i)), s_(s) {}
   static constexpr int N = 99;
   ProcessTask run() { co_await send<int>(s_, N); }
 };
@@ -37,7 +34,7 @@ public:
   using Process::Process;
   LIFETIMECHECK;
 
-  Slot<int> echo{this};
+  Slot<int> echo{ this };
   ProcessTask run() {
     LIFETIMECHECK;
 
@@ -66,13 +63,13 @@ public:
   LIFETIMECHECK;
   SleepingApp(ProcessArgs i,
               std::chrono::milliseconds s = std::chrono::milliseconds(100))
-      : Process(std::move(i)), s_(s) {}
+    : Process(std::move(i)), s_(s) {}
 
   ProcessTask run() {
     auto now = std::chrono::steady_clock::now();
     co_await sleep(s_);
     auto since = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - now);
+      std::chrono::steady_clock::now() - now);
     auto const kWindowsHack = 16;
     ASSERT_GE(since.count() + kWindowsHack, s_.count());
     co_return;
@@ -85,7 +82,7 @@ public:
   int i_;
   SpawnedApp(ProcessArgs a, int i) : Process(std::move(a)), i_(i) {}
   ProcessTask run() {
-    LOG(INFO) << "Run " << i_;
+    ESLOG(LL::INFO, "Run ", i_);
     co_return;
   }
 };
@@ -94,7 +91,7 @@ class BlockForEver : public Process {
 public:
   using Process::Process;
   LIFETIMECHECK;
-  ~BlockForEver() { LOG(INFO) << "Cleanly destroy"; }
+  ~BlockForEver() { ESLOG(LL::INFO, "Cleanly destroy"); }
   ProcessTask run() {
     Slot<int> s(this);
     recv(s);
@@ -108,7 +105,7 @@ public:
   LIFETIMECHECK;
   ProcessTask run() {
     for (int i = 0; i < 5; ++i) {
-      LOG(INFO) << "Spawn " << i;
+      ESLOG(LL::INFO, "Spawn ", i);
       Slot<Pid> s(this);
       auto pid = spawnLinkNotify<SpawnedApp>(s.address(), i);
       auto w = co_await recv(s);
@@ -116,7 +113,7 @@ public:
     }
     Slot<Pid> s(this);
     spawnLinkNotify<BlockForEver>(s.address());
-    LOG(INFO) << "Done spawning";
+    ESLOG(LL::INFO, "Done spawning");
   }
 };
 
@@ -125,33 +122,33 @@ public:
   using Process::Process;
   LIFETIMECHECK;
   static MethodTask<> subfn(Process* parent, int i) {
-    LOG(INFO) << "Start sleep " << i;
+    ESLOG(LL::INFO, "Start sleep ", i);
     co_await parent->sleep(std::chrono::milliseconds(100 + i * 100));
-    LOG(INFO) << "Done sleep " << i;
+    ESLOG(LL::INFO, "Done sleep ", i);
   }
 
   static MethodTask<> fn(Process* parent, TSendAddress<int> to_send, int i) {
-    LOG(INFO) << "Start sleep";
+    ESLOG(LL::INFO, "Start sleep");
     std::vector<MethodTask<>> subs;
     for (int i = 3; i >= 0; i--) {
       subs.push_back(subfn(parent, i));
     }
-    LOG(INFO) << "Queued sleeps";
+    ESLOG(LL::INFO, "Queued sleeps");
     for (auto& s : subs) {
       co_await s;
     }
-    LOG(INFO) << "Done sleeps";
+    ESLOG(LL::INFO, "Done sleeps");
     parent->send(to_send, i);
-    LOG(INFO) << "Done send";
+    ESLOG(LL::INFO, "Done send");
   }
 
   ProcessTask run() {
-    LOG(INFO) << "Run " << 7;
+    ESLOG(LL::INFO, "Run ", 7);
     Slot<int> s(this);
     co_await fn(this, s.address(), 7);
-    LOG(INFO) << "Done calling method, waiting for message";
+    ESLOG(LL::INFO, "Done calling method, waiting for message");
     auto msg = co_await recv(s);
-    LOG(INFO) << msg << " done, expected " << 7;
+    ESLOG(LL::INFO, msg, " done, expected ", 7);
   }
 };
 
@@ -162,14 +159,14 @@ public:
   struct Method : Process {
     std::shared_ptr<bool> b;
     Method(ProcessArgs a, std::shared_ptr<bool> b)
-        : Process(std::move(a)), b(b) {}
+      : Process(std::move(a)), b(b) {}
 
     MethodTask<> runSub() {
       auto mv_b = std::move(b);
-      SCOPE_EXIT {
+      ScopeRun sr([&] {
         *mv_b = true;
-        LOG(INFO) << "Sub process sub task dead";
-      };
+        ESLOG(LL::INFO, "Sub process sub task dead");
+      });
       co_await WaitingAlways{};
     }
 
@@ -178,7 +175,7 @@ public:
       co_await runSub();
     }
 
-    ~Method() { LOG(INFO) << "Method main task dead"; }
+    ~Method() { ESLOG(LL::INFO, "Method main task dead"); }
   };
 
   ProcessTask run() {
@@ -189,19 +186,19 @@ public:
     co_await WaitingYield{};
     queueKill(sub_two);
     co_await WaitingYield{};
-    LOG(INFO) << "Bool is " << *bool_test << " expected " << true;
+    ESLOG(LL::INFO, "Bool is ", *bool_test, " expected ", true);
     ASSERT_TRUE(*bool_test);
   }
 };
 }
 
 template <class T> void run(std::string s, T fn) {
-  LOG(INFO) << std::string(30, '-');
-  LOG(INFO) << "Running example " << s;
+  ESLOG(s::LL::INFO, std::string(30, '-'));
+  ESLOG(s::LL::INFO, "Running example ", s);
   s::Context c;
   fn(c);
   c.run();
-  LOG(INFO) << "Done running example " << s;
+  ESLOG(s::LL::INFO, "Done running example ", s);
   lifetimeChecker.check();
 }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "Except.h"
 #include "IWaiting.h"
 #include "ProcessTask.h"

@@ -4,7 +4,6 @@
 #include <numeric>
 
 #include <boost/asio/ssl/context.hpp>
-#undef ERROR
 
 namespace s {
 
@@ -12,7 +11,9 @@ class Buffer {
 public:
   unsigned char* data() const { return buffer_->data() + offset_; }
   size_t size() const { return length_; }
-  folly::ByteRange range() const { return {data(), size()}; }
+  boost::asio::const_buffer range() const {
+    return boost::asio::const_buffer{data(), size()};
+  }
   static Buffer makeCopy(void const* data, size_t len) {
     BuffIP b(new Buff(data, len));
     return Buffer(b);
@@ -25,7 +26,7 @@ public:
     return Buffer(b);
   }
   void consume(size_t n) {
-    DCHECK(length_ >= n);
+    assert(length_ >= n);
     length_ -= n;
     offset_ += n;
   }

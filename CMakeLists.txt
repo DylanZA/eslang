@@ -4,43 +4,19 @@ SET(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 add_definitions(/await)
 add_definitions(/std:c++latest)
+add_definitions(/D_WIN32_WINNT=0x0601)
 
 message(STATUS CMAKE_CURRENT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 message(STATUS CMAKE_CURRENT_LIST_DIR ${CMAKE_CURRENT_LIST_DIR})
 message(STATUS CMAKE_CURRENT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 message(STATUS CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH})
 
-FIND_PATH(LIBGFLAGS_INCLUDE_DIR gflags/gflags.h)
-FIND_LIBRARY(LIBGFLAGS_LIBRARY NAMES gflags gflags_static)
-include_directories(${LIBGFLAGS_INCLUDE_DIR})
-
-FIND_PATH(LIBGLOG_INCLUDE_DIR glog/logging.h)
-FIND_LIBRARY(LIBGLOG_LIBRARY glog)
-include_directories(${LIBGLOG_INCLUDE_DIR})
-
-FIND_PATH(FOLLY_INCLUDE_DIR folly/Function.h)
-FIND_LIBRARY(LIBEVENT_LIBRARY event)
-FIND_LIBRARY(DOUBLE_CONVERT_LIBRARY double-conversion)
-
-FIND_PATH(FOLLY_INCLUDE_DIR folly/Function.h)
-FIND_LIBRARY(FOLLY_LIBRARY folly)
-
-FIND_PATH(LIBGLOG_INCLUDE_DIR glog/logging.h)
-FIND_LIBRARY(LIBGLOG_LIBRARY glog)
-
 find_package(OpenSSL MODULE REQUIRED)
 
-find_package(Boost COMPONENTS context system filesystem chrono thread iostreams date_time REQUIRED)
-
-FIND_PATH(BEAST_INCLUDE_DIR beast.hpp)
+find_package(Boost COMPONENTS context system filesystem chrono thread iostreams program_options log log_setup date_time REQUIRED)
 
 set(ESLANG_BASE_LIBS
-	${LIBGLOG_LIBRARY}
-	${LIBGFLAGS_LIBRARY}
 	${Boost_LIBRARIES}
-	${LIBEVENT_LIBRARY}
-	${DOUBLE_CONVERT_LIBRARY}
-	${FOLLY_LIBRARY}
 	${OPENSSL_LIBRARIES}
 	shlwapi.lib
 	Iphlpapi.lib
@@ -48,18 +24,14 @@ set(ESLANG_BASE_LIBS
     )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
 include_directories(${OPENSSL_INCLUDE_DIR})
 include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${FOLLY_INCLUDE_DIR})
-include_directories(${LIBGLOG_INCLUDE_DIR})
-include_directories(${BEAST_INCLUDE_DIR})
 
 add_subdirectory(eslang)
 add_subdirectory(eslang_io)
 add_subdirectory(eslang_www)
 set(ESLANG_LIBS eslang eslang_io eslang_www)
-set (EXAMPLES basic tcp count send_back_pressure www)
+set (EXAMPLES tcp count send_back_pressure www)
 foreach(EXAMPLE ${EXAMPLES})
   add_executable (example_${EXAMPLE} examples/${EXAMPLE}.cpp)
   target_link_libraries(example_${EXAMPLE} ${ESLANG_LIBS})

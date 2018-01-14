@@ -3,6 +3,8 @@
 #include <boost/asio/ssl.hpp>
 #include <numeric>
 
+#include <eslang/Logging.h>
+
 namespace s {
 using namespace boost::asio;
 
@@ -11,7 +13,7 @@ Tcp::ListenerOptions Tcp::ListenerOptions::withSslFiles(std::string ca,
                                                         std::string key) const {
   auto r = *this;
   r.sslContextFactory = [ca, cert, key](boost::asio::io_service& svc) {
-    auto ret = std::make_unique<ssl::context>(svc, ssl::context::sslv23_server);
+    auto ret = std::make_unique<ssl::context>(ssl::context::sslv23_server);
     ret->set_options(ssl::context::default_workarounds |
                      ssl::context::no_sslv2);
     ret->use_certificate_chain_file(ca);
@@ -40,7 +42,7 @@ struct SslSocketTraits : SocketProcess {
 
   MethodTask<void> start() {
     EslangPromise p_;
-    VLOG(3) << "Handshaking " << toId();
+    ESLOG(LL::TRACE, "Handshaking ", toId());
     socket().async_handshake(
         boost::asio::ssl::stream_base::server,
         [&](const boost::system::error_code& error) {
@@ -48,9 +50,9 @@ struct SslSocketTraits : SocketProcess {
             return;
           }
           if (error) {
-            VLOG(3) << "Handshaking threw " << toId();
-            p_.setException(std::runtime_error(folly::to<std::string>(
-                "SSL handshake threw ", error.message())));
+            ESLOG(LL::TRACE, "Handshaking threw ", toId());
+            p_.setException(std::runtime_error(
+                concatString("SSL handshake threw ", error.message())));
             return;
           }
           p_.setIfUnset();
@@ -93,37 +95,37 @@ template <class Traits> struct TSocketProcess : public Traits {
   bool eof_ = false;
 
   EslangPromise p_;
-  std::optional<folly::exception_wrapper> except_;
+  std::optional<ExceptionWrapper> except_;
 
-  std::optional<TSendAddress<Tcp::ReceiveData>> to_send;
+  std::optional<TSendAddress<Tcp::ReceiveData>> toSend;
 
   TSendAddress<Tcp::Socket> onReady;
 
   TSocketProcess(ProcessArgs i, typename Traits::Socket socket,
                  TSendAddress<Tcp::Socket> onReady)
       : Traits(std::move(i), std::move(socket)), onReady(std::move(onReady)) {
-    VLOG(3) << "Socket " << toId() << " created";
+    ESLOG(LL::TRACE, "Socket ", toId(), " created");
   }
 
-  ~TSocketProcess() { VLOG(3) << pid() << ": ~SocketProcess fd=" << toId(); }
+  ~TSocketProcess() { ESLOG(LL::TRACE, pid(), ": ~SocketProcess fd=", toId()); }
 
   void checkExcept() {
     if (except_) {
-      except_->throw_exception();
+      except_->maybeThrowException();
     }
   }
 
   void setValue() { p_.setIfUnset(); }
 
   void setError(boost::system::error_code const& ec) {
-    setException(std::runtime_error(
-        folly::to<std::string>("Listener threw ", ec.message())));
+    setException(
+        std::runtime_error(concatString("Listener threw ", ec.message())));
   }
 
   template <class T> void setException(T const& e) {
     setValue();
     if (!except_) {
-      except_ = folly::make_exception_wrapper<T>(e);
+      except_ = ExceptionWrapper::make(e);
     }
   }
 
@@ -137,7 +139,7 @@ template <class Traits> struct TSocketProcess : public Traits {
           }
           if (error == error::eof) {
             eof_ = true;
-            VLOG(3) << pid() << ": EOF";
+            ESLOG(LL::TRACE, pid(), ": EOF");
             setValue();
             return;
           }
@@ -146,7 +148,7 @@ template <class Traits> struct TSocketProcess : public Traits {
             return;
           }
           if (bytes > 0) {
-            send(*to_send,
+            send(*toSend,
                  Tcp::ReceiveData(pid(), Buffer::makeCopy(&readBuff, bytes)));
           }
           asyncRead();
@@ -156,6 +158,7 @@ template <class Traits> struct TSocketProcess : public Traits {
   bool isWriting = false;
   void write(Buffer buff) {
     isWriting = true;
+    p_ = EslangPromise();
     async_write(socket(), buffer(buff.data(), buff.size()),
                 [this](const boost::system::error_code& ec,
                        std::size_t bytes_transferred) {
@@ -164,10 +167,10 @@ template <class Traits> struct TSocketProcess : public Traits {
                   }
                   isWriting = false;
                   if (ec) {
-                    LOG(INFO) << "Write error " << ec.message();
+                    ESLOG(LL::INFO, "Write error ", ec.message());
                     setError(ec);
                   } else {
-                    LOG(INFO) << "Wrote " << bytes_transferred;
+                    ESLOG(LL::INFO, "Wrote ", bytes_transferred);
                     setValue();
                   }
                 });
@@ -180,7 +183,7 @@ template <class Traits> struct TSocketProcess : public Traits {
     this->send(onReady, Tcp::Socket(pid()));
 
     // now can process
-    to_send = co_await recv(init);
+    toSend = co_await recv(init);
     asyncRead();
     while (!eof_) {
       if (isWriting) {
@@ -220,8 +223,8 @@ struct ListenerProcess : public Process {
   }
 
   void setException(boost::system::error_code const& ec) {
-    error_.setException(std::runtime_error(
-        folly::to<std::string>("Listener threw ", ec.message())));
+    error_.setException(
+        std::runtime_error(concatString("Listener threw ", ec.message())));
   }
 
   ip::tcp::socket nextSocket() {
@@ -260,13 +263,13 @@ struct ListenerProcess : public Process {
   }
   ProcessTask run() {
     ip::tcp::acceptor socket(c_->ioService());
-    LOG(INFO) << "Bind to " << options.port;
+    ESLOG(LL::INFO, "Bind to ", options.port);
     socket.open(protocol);
     socket.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
     socket.bind(ip::tcp::endpoint(protocol, options.port));
     socket.listen(10000);
     asyncAccept(socket);
-    VLOG(2) << "Listening on " << socket.local_endpoint();
+    ESLOG(LL::DEBUG, "Listening on ", socket.local_endpoint());
     co_await WaitOnFuture(&error_);
   }
 };
@@ -279,7 +282,7 @@ Pid Tcp::makeListener(Process* parent, TSendAddress<Socket> new_socket_address,
 
 void Tcp::initRecvSocket(Process* sender, Socket socket,
                          TSendAddress<ReceiveData> new_socket_address) {
-  VLOG(2) << "Init " << socket.pid;
+  ESLOG(LL::DEBUG, "Init ", socket.pid);
   sender->send(socket.pid, &SocketProcess::init, std::move(new_socket_address));
 }
 

@@ -1,16 +1,24 @@
 #pragma once
 #include <eslang/Except.h>
-#include <folly/Conv.h>
-#include <folly/Synchronized.h>
+#include <eslang/Logging.h>
 #include <gtest/gtest.h>
 #include <sstream>
+#include <mutex>
 
 namespace {
+
 struct ScopeLog {
   std::string const s;
   explicit ScopeLog(std::string s) : s(s) {}
 
-  ~ScopeLog() { LOG(INFO) << "~ScopeLog: " << s; }
+  ~ScopeLog() { ESLOG(s::LL::INFO, "~ScopeLog: ", s); }
+};
+
+struct ScopeRun {
+  std::function<void()> fn;
+  explicit ScopeRun(std::function<void()> fn) : fn(fn) {}
+
+  ~ScopeRun() { fn(); }
 };
 
 struct LifetimeChecker {
@@ -21,11 +29,15 @@ struct LifetimeChecker {
       return data.emplace(++i, std::move(s)).first->first;
     }
   };
-  folly::Synchronized<State> state;
+  State state;
+  std::mutex mutex;
+  auto lock() {
+    return std::unique_lock<std::mutex>(mutex);
+  }
   void check() {
     std::stringstream ss;
-    auto l = state.rlock();
-    for (auto const& kv : l->data) {
+    auto l = lock();
+    for (auto const& kv : state.data) {
       ss << kv.second << ",";
     }
     auto bad = ss.str();
@@ -38,14 +50,19 @@ LifetimeChecker lifetimeChecker;
 
 struct LifetimeCheck {
   int i;
-  LifetimeCheck(std::string s) : i(lifetimeChecker.state->add(std::move(s))) {}
+  LifetimeCheck(std::string s) {
+    auto l = lifetimeChecker.lock();
+    i = lifetimeChecker.state.add(std::move(s));
+  }
   LifetimeCheck(LifetimeCheck const&) = delete;
   LifetimeCheck(LifetimeCheck&&) = delete;
   LifetimeCheck& operator=(LifetimeCheck const&) = delete;
   LifetimeCheck& operator=(LifetimeCheck&&) = delete;
-  ~LifetimeCheck() { lifetimeChecker.state->data.erase(i); }
+  ~LifetimeCheck() { 
+    auto l = lifetimeChecker.lock();
+    lifetimeChecker.state.data.erase(i); 
+  }
 };
 }
 
-#define LIFETIMECHECK                                                          \
-  LifetimeCheck lc{folly::to<std::string>(__FILE__, ":", __LINE__)};
+#define LIFETIMECHECK LifetimeCheck lc{concatString(__FILE__, ":", __LINE__)};

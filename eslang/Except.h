@@ -1,5 +1,5 @@
 #pragma once
-#include <folly/Conv.h>
+#include "ConcatString.h"
 #include <stdexcept>
 namespace s {
 
@@ -11,11 +11,10 @@ public:
 }
 
 // todo: add line numbers etc...
-#define ESLANGEXCEPT(...)                                                      \
-  throw ::s::EslangException(folly::to<std::string>(__VA_ARGS__));
+#define ESLANGEXCEPT(...) throw ::s::EslangException(concatString(__VA_ARGS__));
 
 #define ESLANGREQUIRE(b, ...)                                                  \
   do {                                                                         \
     if (!b)                                                                    \
-      throw ::s::EslangException(folly::to<std::string>(__VA_ARGS__));         \
+      throw ::s::EslangException(concatString(__VA_ARGS__));                   \
   } while (0);
