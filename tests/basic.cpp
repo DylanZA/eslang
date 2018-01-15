@@ -10,7 +10,7 @@ class ThrowingApp : public Process {
 public:
   using Process::Process;
   LIFETIMECHECK;
-  Slot<std::string> message{ this };
+  Slot<std::string> message{this};
   ProcessTask run() {
     LIFETIMECHECK;
     auto m = co_await recv(message);
@@ -24,7 +24,7 @@ public:
   ~SenderApp() { ESLOG(LL::INFO, "Sender destruct"); }
   TSendAddress<int> s_;
   SenderApp(ProcessArgs i, TSendAddress<int> s)
-    : Process(std::move(i)), s_(s) {}
+      : Process(std::move(i)), s_(s) {}
   static constexpr int N = 99;
   ProcessTask run() { co_await send<int>(s_, N); }
 };
@@ -34,7 +34,7 @@ public:
   using Process::Process;
   LIFETIMECHECK;
 
-  Slot<int> echo{ this };
+  Slot<int> echo{this};
   ProcessTask run() {
     LIFETIMECHECK;
 
@@ -63,13 +63,13 @@ public:
   LIFETIMECHECK;
   SleepingApp(ProcessArgs i,
               std::chrono::milliseconds s = std::chrono::milliseconds(100))
-    : Process(std::move(i)), s_(s) {}
+      : Process(std::move(i)), s_(s) {}
 
   ProcessTask run() {
     auto now = std::chrono::steady_clock::now();
     co_await sleep(s_);
     auto since = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - now);
+        std::chrono::steady_clock::now() - now);
     auto const kWindowsHack = 16;
     ASSERT_GE(since.count() + kWindowsHack, s_.count());
     co_return;
@@ -159,7 +159,7 @@ public:
   struct Method : Process {
     std::shared_ptr<bool> b;
     Method(ProcessArgs a, std::shared_ptr<bool> b)
-      : Process(std::move(a)), b(b) {}
+        : Process(std::move(a)), b(b) {}
 
     MethodTask<> runSub() {
       auto mv_b = std::move(b);

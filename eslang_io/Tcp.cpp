@@ -107,7 +107,9 @@ template <class Traits> struct TSocketProcess : public Traits {
     ESLOG(LL::TRACE, "Socket ", this->toId(), " created");
   }
 
-  ~TSocketProcess() { ESLOG(LL::TRACE, this->pid(), ": ~SocketProcess fd=", this->toId()); }
+  ~TSocketProcess() {
+    ESLOG(LL::TRACE, this->pid(), ": ~SocketProcess fd=", this->toId());
+  }
 
   void checkExcept() {
     if (except_) {
@@ -149,7 +151,8 @@ template <class Traits> struct TSocketProcess : public Traits {
           }
           if (bytes > 0) {
             this->send(*toSend,
-                 Tcp::ReceiveData(this->pid(), Buffer::makeCopy(&readBuff, bytes)));
+                       Tcp::ReceiveData(this->pid(),
+                                        Buffer::makeCopy(&readBuff, bytes)));
           }
           asyncRead();
         });

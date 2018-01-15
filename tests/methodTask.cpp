@@ -109,9 +109,7 @@ public:
   ProcessTask run() {
     LIFETIMECHECK;
     int i = 0;
-    ScopeRun sr([&] {
-      EXPECT_EQ(i, 1);
-    });
+    ScopeRun sr([&] { EXPECT_EQ(i, 1); });
     co_await A(i);
   }
 };

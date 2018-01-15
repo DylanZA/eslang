@@ -120,38 +120,36 @@ private:
   boost::asio::io_service ioService_;
 };
 
-   template <class T, class... Args> Pid Process::spawn(Args... args) {
-    return c_->spawn<T>(std::forward<Args>(args)...);
-  }
+template <class T, class... Args> Pid Process::spawn(Args... args) {
+  return c_->spawn<T>(std::forward<Args>(args)...);
+}
 
-  template <class T, class... Args> Pid Process::spawnLink(Args... args) {
-    auto new_pid =
-        c_->spawnWith<T>([p = this->pid_](ProcessArgs & a) { a.killOnDie = p; },
-                         std::forward<Args>(args)...);
-    addKillOnDie(new_pid);
-    return new_pid;
-  }
+template <class T, class... Args> Pid Process::spawnLink(Args... args) {
+  auto new_pid =
+      c_->spawnWith<T>([p = this->pid_](ProcessArgs & a) { a.killOnDie = p; },
+                       std::forward<Args>(args)...);
+  addKillOnDie(new_pid);
+  return new_pid;
+}
 
-  // spawn a process, link it to us (if we die), but notify us if they die
-  template <class T, class... Args>
-    Pid Process::spawnLinkNotify(TSendAddress<Pid> send_address, Args... args) {
-    auto new_pid =
-        c_->spawnWith<T>([s = std::move(send_address)](
-                             ProcessArgs & a) { a.notifyOnDead = s; },
-                         std::forward<Args>(args)...);
-    addKillOnDie(new_pid);
-    return new_pid;
-  }
+// spawn a process, link it to us (if we die), but notify us if they die
+template <class T, class... Args>
+Pid Process::spawnLinkNotify(TSendAddress<Pid> send_address, Args... args) {
+  auto new_pid = c_->spawnWith<T>([s = std::move(send_address)](
+                                      ProcessArgs & a) { a.notifyOnDead = s; },
+                                  std::forward<Args>(args)...);
+  addKillOnDie(new_pid);
+  return new_pid;
+}
 
-  template <class T, class... Args>
-  WaitingMaybe Process::send(TSendAddress<T> p, Args&&... params) {
-    c_->queueSend(p, Message<T>(std::forward<Args>(params)...));
-    return WaitingMaybe(c_->waitOnQueue());
-  }
+template <class T, class... Args>
+WaitingMaybe Process::send(TSendAddress<T> p, Args&&... params) {
+  c_->queueSend(p, Message<T>(std::forward<Args>(params)...));
+  return WaitingMaybe(c_->waitOnQueue());
+}
 
-  template <class T, class Y, class... Args>
-    WaitingMaybe Process::send(Pid pid, Slot<T> Y::*slot, Args&&... params) {
-    return send(c_->makeSendAddress(pid, slot), std::forward<Args>(params)...);
-  }
-
+template <class T, class Y, class... Args>
+WaitingMaybe Process::send(Pid pid, Slot<T> Y::*slot, Args&&... params) {
+  return send(c_->makeSendAddress(pid, slot), std::forward<Args>(params)...);
+}
 }

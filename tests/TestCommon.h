@@ -2,8 +2,8 @@
 #include <eslang/Except.h>
 #include <eslang/Logging.h>
 #include <gtest/gtest.h>
-#include <sstream>
 #include <mutex>
+#include <sstream>
 
 namespace {
 
@@ -31,9 +31,7 @@ struct LifetimeChecker {
   };
   State state;
   std::mutex mutex;
-  auto lock() {
-    return std::unique_lock<std::mutex>(mutex);
-  }
+  auto lock() { return std::unique_lock<std::mutex>(mutex); }
   void check() {
     std::stringstream ss;
     auto l = lock();
@@ -58,9 +56,9 @@ struct LifetimeCheck {
   LifetimeCheck(LifetimeCheck&&) = delete;
   LifetimeCheck& operator=(LifetimeCheck const&) = delete;
   LifetimeCheck& operator=(LifetimeCheck&&) = delete;
-  ~LifetimeCheck() { 
+  ~LifetimeCheck() {
     auto l = lifetimeChecker.lock();
-    lifetimeChecker.state.data.erase(i); 
+    lifetimeChecker.state.data.erase(i);
   }
 };
 }

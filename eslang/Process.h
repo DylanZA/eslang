@@ -55,13 +55,13 @@ public:
   template <class T, class... Args> Pid spawnLink(Args... args);
   // spawn a process, link it to us (if we die), but notify us if they die
   template <class T, class... Args>
-    Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args);
+  Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args);
 
   template <class T, class... Args>
-    WaitingMaybe send(TSendAddress<T> p, Args&&... params);
+  WaitingMaybe send(TSendAddress<T> p, Args&&... params);
 
   template <class T, class Y, class... Args>
-    WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params);
+  WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params);
 
   Context* c() { return c_; }
 

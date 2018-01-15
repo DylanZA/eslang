@@ -1,9 +1,9 @@
-#include <eslang/Context.h>
-#include <eslang/Logging.h>
-#include <eslang_io/Tcp.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/sinks/text_file_backend.hpp>
+#include <eslang/Context.h>
+#include <eslang/Logging.h>
+#include <eslang_io/Tcp.h>
 
 namespace s {
 
@@ -11,11 +11,11 @@ class TcpEchoRunner : public Process {
 public:
   Tcp::Socket s_;
   TcpEchoRunner(ProcessArgs i, Tcp::Socket s)
-    : Process(std::move(i)), s_(std::move(s)) {
+      : Process(std::move(i)), s_(std::move(s)) {
     link(s.pid);
   }
 
-  Slot<Tcp::ReceiveData> recv{ this };
+  Slot<Tcp::ReceiveData> recv{this};
   ProcessTask run() {
     Tcp::initRecvSocket(this, s_, recv.address());
     while (true) {
@@ -28,9 +28,10 @@ public:
 class TcpEchoServer : public Process {
 public:
   using Process::Process;
-  Slot<Tcp::Socket> new_socket{ this };
-  Tcp::ListenerOptions options_{ 0 };
-  TcpEchoServer(ProcessArgs i, uint32_t p) : Process(std::move(i)), options_(p) {}
+  Slot<Tcp::Socket> new_socket{this};
+  Tcp::ListenerOptions options_{0};
+  TcpEchoServer(ProcessArgs i, uint32_t p)
+      : Process(std::move(i)), options_(p) {}
 
   ProcessTask run() {
     ESLOG(LL::DEBUG, "Start echo at ", pid());

@@ -256,7 +256,7 @@ public:
 template <class T>
 class MethodTask : public MethodTaskBase<T, MethodTaskPromiseWithReturn<T>> {
 public:
-  using TParent=MethodTaskBase<T, MethodTaskPromiseWithReturn<T>>;
+  using TParent = MethodTaskBase<T, MethodTaskPromiseWithReturn<T>>;
   using TParent::TParent;
   T& await_resume() { return this->coroutine_.promise().t_; }
 };

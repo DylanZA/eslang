@@ -51,8 +51,9 @@ public:
   EslangPromise(EslangPromise const&) = delete;
   EslangPromise& operator=(EslangPromise const&) = delete;
 
-  EslangPromise(EslangPromise&& rhs) : exec_(std::move(rhs.exec_)), set_(rhs.set_), exception_(std::move(rhs.exception_)) {
-  }
+  EslangPromise(EslangPromise&& rhs)
+      : exec_(std::move(rhs.exec_)), set_(rhs.set_),
+        exception_(std::move(rhs.exception_)) {}
 
   EslangPromise& operator=(EslangPromise&& rhs) {
     using std::swap;
@@ -90,6 +91,7 @@ public:
   void setContinuation(boost::asio::io_service& io_service, Function func) {
     exec_ = std::make_pair(&io_service, std::move(func));
   }
+
 private:
   void set() {
     set_ = true;

@@ -128,8 +128,7 @@ public:
       co_yield 0;
       co_yield 1;
       co_yield 2;
-    }
-    else {
+    } else {
       auto ret = yieldInts(n - 1);
       int count = 0;
       while (co_await ret.next()) {
@@ -158,7 +157,7 @@ class GenThrows : public Process {
 public:
   using Process::Process;
   LIFETIMECHECK;
-  ScopeLog scopeLog{ "GenThrows" };
+  ScopeLog scopeLog{"GenThrows"};
   GenTask<int> yieldInts() {
     ScopeLog sc("GenThrows::yieldInts");
     LIFETIMECHECK;
@@ -173,7 +172,7 @@ public:
   }
 
   ProcessTask run() {
-    ScopeLog scopeESLOG{ "GenThrows::ProcessTask" };
+    ScopeLog scopeESLOG{"GenThrows::ProcessTask"};
     LIFETIMECHECK;
     auto ret = yieldInts();
     while (co_await ret.next()) {
@@ -186,9 +185,9 @@ class ProcToDestroy : public Process {
 public:
   LIFETIMECHECK;
   TSendAddress<int> addr;
-  ScopeLog scopeLog{ "~ProcToDestroy" };
+  ScopeLog scopeLog{"~ProcToDestroy"};
   ProcToDestroy(ProcessArgs a, TSendAddress<int> addr)
-    : Process(std::move(a)), addr(addr) {}
+      : Process(std::move(a)), addr(addr) {}
 
   GenTask<int> yieldInts() {
     ScopeLog sc("ProcToDestroy::yieldInts");
@@ -219,10 +218,10 @@ class GenDestroy : public Process {
 public:
   using Process::Process;
   LIFETIMECHECK;
-  ScopeLog scopeLog{ "~GenDestroy" };
+  ScopeLog scopeLog{"~GenDestroy"};
   ProcessTask run() {
     ScopeLog sc("GenDestroy");
-    Slot<int> slot{ this };
+    Slot<int> slot{this};
     auto pid = spawn<ProcToDestroy>(slot.address());
     int msg = co_await recv(slot);
     ESLOG(LL::INFO, "Got ", msg);
@@ -244,9 +243,9 @@ public:
     int const N = 10;
     for
       co_await(int i : genInts(N)) {
-      count++;
-      ESLOG(LL::INFO, "Got ", i);
-    }
+        count++;
+        ESLOG(LL::INFO, "Got ", i);
+      }
     EXPECT_EQ(N, count);
     co_return;
   }
@@ -270,9 +269,9 @@ public:
     int x = 0;
     for
       co_await(int i : C(true)) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
     EXPECT_EQ(1, x);
     co_yield 1;
     if (should_sleep) {
@@ -280,9 +279,9 @@ public:
     }
     for
       co_await(int i : C(false)) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
     EXPECT_EQ(2, x);
     if (should_sleep) {
       co_await sleep(std::chrono::milliseconds(1));
@@ -295,22 +294,22 @@ public:
     int x = 0;
     for
       co_await(int i : B(true)) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
     EXPECT_EQ(2, x);
     co_await sleep(std::chrono::milliseconds(1));
     for
       co_await(int i : B(false)) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
     EXPECT_EQ(4, x);
     for
       co_await(int i : B(true)) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
     EXPECT_EQ(6, x);
     co_yield 1;
     co_await sleep(std::chrono::milliseconds(1));
@@ -320,14 +319,12 @@ public:
   ProcessTask run() {
     LIFETIMECHECK;
     int x = 0;
-    ScopeRun sr([&] {
-      EXPECT_EQ(x, 2);    
-    });
+    ScopeRun sr([&] { EXPECT_EQ(x, 2); });
     for
       co_await(int i : A()) {
-      EXPECT_EQ(1, i);
-      ++x;
-    }
+        EXPECT_EQ(1, i);
+        ++x;
+      }
   }
 };
 }

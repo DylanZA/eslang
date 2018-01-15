@@ -10,11 +10,12 @@ class Listener : public Process {
 public:
   using Process::Process;
 
-  Slot<std::string> r{ this };
+  Slot<std::string> r{this};
   ProcessTask run() {
     int i = 0;
     while (true) {
-      ESLOG(LL::INFO, "Receive ", i++, " with ", (co_await recv(r)).size(), " bytes");
+      ESLOG(LL::INFO, "Receive ", i++, " with ", (co_await recv(r)).size(),
+            " bytes");
     }
   }
 };

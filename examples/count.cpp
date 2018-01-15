@@ -1,8 +1,7 @@
-#include <eslang/Context.h>
-#include <eslang/Logging.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
-
+#include <eslang/Context.h>
+#include <eslang/Logging.h>
 
 namespace s {
 
@@ -10,10 +9,10 @@ class Counter : public Process {
 public:
   int const kMax;
   std::optional<Pid> const target;
-  Slot<int> from_parent_process{ this };
-  Slot<int> from_sub_process{ this };
+  Slot<int> from_parent_process{this};
+  Slot<int> from_sub_process{this};
   Counter(ProcessArgs i, int m, Pid target)
-    : Process(std::move(i)), kMax(m), target(target) {}
+      : Process(std::move(i)), kMax(m), target(target) {}
 
   Counter(ProcessArgs i, int m) : Process(std::move(i)), kMax(m) {}
 
@@ -107,18 +106,18 @@ template <class T> void run(std::string type, int const k) {
   auto start = std::chrono::steady_clock::now();
   auto starter = c.spawn<T>(k);
   c.run();
-  ESLOG(s::LL::INFO, "Took ", 0.001 *
-       std::chrono::duration_cast<std::chrono::milliseconds>(
-         std::chrono::steady_clock::now() - start).count(),
-       "s to count to ", k, " by spawning that many ", type);
+  ESLOG(s::LL::INFO, "Took ",
+        0.001 *
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start)
+                .count(),
+        "s to count to ", k, " by spawning that many ", type);
   ESLOG(s::LL::INFO, "----------------------", " end ", type);
 }
 
 int main(int argc, char** argv) {
-  boost::log::core::get()->set_filter
-  (
-    boost::log::trivial::severity >= boost::log::trivial::info
-  );
+  boost::log::core::get()->set_filter(boost::log::trivial::severity >=
+                                      boost::log::trivial::info);
 
   // run<s::SleepProfiler>("sleep profiler", 3000000);
   // submethods run on the same stack, so cannot have too many
