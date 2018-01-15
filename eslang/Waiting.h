@@ -102,7 +102,7 @@ template <class... TTypes> struct WaitingMessages : IWaiting {
   template <size_t I>
   auto get_optional() -> std::optional<
       typename std::tuple_element<I, std::tuple<TTypes...>>::type> {
-    using TM = std::tuple_element<I, std::tuple<TTypes...>>::type;
+    using TM = typename std::tuple_element<I, std::tuple<TTypes...>>::type;
     std::optional<TM> ret;
     if (!std::get<I>(messages)->empty()) {
       ret.emplace(static_cast<TM&&>(std::get<I>(messages)->pop().val()));

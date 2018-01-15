@@ -18,7 +18,7 @@ public:
       explicit I(T e) : e_(std::move(e)) {}
       void maybeThrow() override { throw e_; }
     };
-    return std::make_unique<I>(std::move(ex));
+    return ExceptionWrapper(std::make_unique<I>(std::move(ex)));
   }
 
   void maybeThrowException() { impl_->maybeThrow(); }

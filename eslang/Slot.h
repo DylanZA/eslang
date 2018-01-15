@@ -79,15 +79,15 @@ public:
 
 template <class T> class Slot : public TSlotBase<T> {
 public:
-  Slot(Process* p) : TSlotBase(p) {}
+  Slot(Process* p) : TSlotBase<T>(p) {}
 
   MessageQueue<T>* queue() override { return &messages_; }
 
   TSendAddress<T> address() const override {
-    return TSendAddress<T>(parent_->pid(), id_);
+    return TSendAddress<T>(this->parent_->pid(), this->id_);
   }
 
-  SlotId id() const { return id_; }
+  SlotId id() const { return this->id_; }
 
   void push(MessageBase message) override {
     Message<T>* m = static_cast<Message<T>*>(&message);

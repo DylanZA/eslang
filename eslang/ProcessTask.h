@@ -63,6 +63,7 @@ struct PromiseBase {
   PromiseBase* subCoroutineChild = nullptr;
   ProcessPromise* processPromise = nullptr;
 
+  void unhandled_exception() { std::terminate(); }
   auto initial_suspend() { return std::experimental::suspend_always{}; }
   auto final_suspend() { return std::experimental::suspend_always{}; }
   virtual std::experimental::coroutine_handle<> getHandle() {
@@ -187,6 +188,7 @@ template <class T> struct GenPromise : MethodTaskPromise {
     }
   };
 
+  void return_void() {}
   auto yield_value(T t) {
     t_ = std::move(t);
     return YieldSuspender{};
@@ -234,8 +236,8 @@ public:
     return true;
   }
 
-  template <class T>
-  void await_suspend(std::experimental::coroutine_handle<T> parent) noexcept {
+  template <class U>
+  void await_suspend(std::experimental::coroutine_handle<U> parent) noexcept {
     updateSuspend(parent.promise(), coroutine_.promise());
   }
 
@@ -254,8 +256,9 @@ public:
 template <class T>
 class MethodTask : public MethodTaskBase<T, MethodTaskPromiseWithReturn<T>> {
 public:
-  using MethodTaskBase::MethodTaskBase;
-  T& await_resume() { return coroutine_.promise().t_; }
+  using TParent=MethodTaskBase<T, MethodTaskPromiseWithReturn<T>>;
+  using TParent::TParent;
+  T& await_resume() { return this->coroutine_.promise().t_; }
 };
 
 template <class T> struct GenTask {
@@ -307,7 +310,7 @@ public:
         next = NextAwaitable(nullptr);
       }
     }
-    template <class T> void await_suspend(T t) {
+    template <class U> void await_suspend(U t) {
       next.await_suspend(std::move(t));
     }
     T& operator*() { return next.gen->take(); }
@@ -325,7 +328,7 @@ public:
       return valid ? Iterator(std::move(next))
                    : Iterator(NextAwaitable(nullptr));
     }
-    template <class T> void await_suspend(T t) {
+    template <class U> void await_suspend(U t) {
       next.await_suspend(std::move(t));
     }
   };

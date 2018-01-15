@@ -51,39 +51,17 @@ public:
     return notifyOnDie_;
   }
 
-  template <class T, class... Args> Pid spawn(Args... args) {
-    return c_->spawn<T>(std::forward<Args>(args)...);
-  }
-
-  template <class T, class... Args> Pid spawnLink(Args... args) {
-    auto new_pid =
-        c_->spawnWith<T>([p = this->pid_](ProcessArgs & a) { a.killOnDie = p; },
-                         std::forward<Args>(args)...);
-    addKillOnDie(new_pid);
-    return new_pid;
-  }
-
+  template <class T, class... Args> Pid spawn(Args... args);
+  template <class T, class... Args> Pid spawnLink(Args... args);
   // spawn a process, link it to us (if we die), but notify us if they die
   template <class T, class... Args>
-  Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args) {
-    auto new_pid =
-        c_->spawnWith<T>([s = std::move(send_address)](
-                             ProcessArgs & a) { a.notifyOnDead = s; },
-                         std::forward<Args>(args)...);
-    addKillOnDie(new_pid);
-    return new_pid;
-  }
+    Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args);
 
   template <class T, class... Args>
-  WaitingMaybe send(TSendAddress<T> p, Args&&... params) {
-    c_->queueSend(p, Message<T>(std::forward<Args>(params)...));
-    return WaitingMaybe(c_->waitOnQueue());
-  }
+    WaitingMaybe send(TSendAddress<T> p, Args&&... params);
 
   template <class T, class Y, class... Args>
-  WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params) {
-    return send(c_->makeSendAddress(pid, slot), std::forward<Args>(params)...);
-  }
+    WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params);
 
   Context* c() { return c_; }
 
@@ -101,7 +79,7 @@ public:
 
   template <class... TSlots>
   WaitingMessages<TSlots...> tryRecv(Slot<TSlots>&... slots) {
-    return WaitingMessages<TSlots...>(std::forward<Slot<TSlots>>(slots)...);
+    return WaitingMessages<TSlots...>(slots...);
   }
 
   template <class T> WaitingMessage<T> recv(Slot<T>& slot) {

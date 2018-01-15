@@ -104,10 +104,10 @@ template <class Traits> struct TSocketProcess : public Traits {
   TSocketProcess(ProcessArgs i, typename Traits::Socket socket,
                  TSendAddress<Tcp::Socket> onReady)
       : Traits(std::move(i), std::move(socket)), onReady(std::move(onReady)) {
-    ESLOG(LL::TRACE, "Socket ", toId(), " created");
+    ESLOG(LL::TRACE, "Socket ", this->toId(), " created");
   }
 
-  ~TSocketProcess() { ESLOG(LL::TRACE, pid(), ": ~SocketProcess fd=", toId()); }
+  ~TSocketProcess() { ESLOG(LL::TRACE, this->pid(), ": ~SocketProcess fd=", this->toId()); }
 
   void checkExcept() {
     if (except_) {
@@ -131,7 +131,7 @@ template <class Traits> struct TSocketProcess : public Traits {
 
   char readBuff[16000];
   void asyncRead() {
-    socket().async_read_some(
+    this->socket().async_read_some(
         buffer(readBuff, sizeof(readBuff)),
         [this](const boost::system::error_code& error, std::size_t bytes) {
           if (error == error::operation_aborted) {
@@ -139,7 +139,7 @@ template <class Traits> struct TSocketProcess : public Traits {
           }
           if (error == error::eof) {
             eof_ = true;
-            ESLOG(LL::TRACE, pid(), ": EOF");
+            ESLOG(LL::TRACE, this->pid(), ": EOF");
             setValue();
             return;
           }
@@ -148,8 +148,8 @@ template <class Traits> struct TSocketProcess : public Traits {
             return;
           }
           if (bytes > 0) {
-            send(*toSend,
-                 Tcp::ReceiveData(pid(), Buffer::makeCopy(&readBuff, bytes)));
+            this->send(*toSend,
+                 Tcp::ReceiveData(this->pid(), Buffer::makeCopy(&readBuff, bytes)));
           }
           asyncRead();
         });
@@ -159,7 +159,7 @@ template <class Traits> struct TSocketProcess : public Traits {
   void write(Buffer buff) {
     isWriting = true;
     p_ = EslangPromise();
-    async_write(socket(), buffer(buff.data(), buff.size()),
+    async_write(this->socket(), buffer(buff.data(), buff.size()),
                 [this](const boost::system::error_code& ec,
                        std::size_t bytes_transferred) {
                   if (ec == error::operation_aborted) {
@@ -178,12 +178,12 @@ template <class Traits> struct TSocketProcess : public Traits {
 
   ProcessTask run() {
     // init the socket
-    co_await start();
+    co_await this->start();
     // tell our owner about us
-    this->send(onReady, Tcp::Socket(pid()));
+    this->send(onReady, Tcp::Socket(this->pid()));
 
     // now can process
-    toSend = co_await recv(init);
+    toSend = co_await this->recv(this->init);
     asyncRead();
     while (!eof_) {
       if (isWriting) {
@@ -193,7 +193,7 @@ template <class Traits> struct TSocketProcess : public Traits {
         checkExcept();
       } else {
         auto ret = co_await makeWithWaitingFuture(
-            &p_, tryRecv(send_data, send_many_data));
+            &p_, this->tryRecv(this->send_data, this->send_many_data));
         checkExcept();
         if (std::get<0>(ret)) {
           write(std::get<0>(ret).value());

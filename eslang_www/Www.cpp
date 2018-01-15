@@ -155,7 +155,7 @@ public:
         StreamBatcher sb(this, s_);
         if (!chunked) {
           for
-            co_await(auto buff : parser.convert(std::move(resp))) {
+            co_await(auto buff : parser.convert(resp)) {
             sb.push(std::move(buff));
           }
         }
