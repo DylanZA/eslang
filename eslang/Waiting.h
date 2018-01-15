@@ -73,6 +73,8 @@ WithWaitingFuture<T> makeWithWaitingFuture(EslangPromise* p, T t) {
   return WithWaitingFuture<T>(p, std::move(t));
 }
 
+using WaitingFuture = WithWaitingFuture<WaitingAlways>;
+
 template <class... TTypes> struct WaitingMessages : IWaiting {
   std::tuple<MessageQueue<TTypes>*...> messages;
   std::array<SendAddress, sizeof...(TTypes)> addresses;

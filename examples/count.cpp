@@ -30,7 +30,8 @@ public:
     if (our_value < kMax) {
       // spawn a counter that will send back to us
       auto pid = spawn<Counter>(kMax, this->pid());
-      send<int>(pid, &s::Counter::from_parent_process, our_value);
+      send<int>(makeSendAddress(pid, &s::Counter::from_parent_process),
+                our_value);
       auto subprocess_result = co_await recv(from_sub_process);
       if (our_value + 1 != subprocess_result) {
         throw std::runtime_error("unexpected");
@@ -41,7 +42,8 @@ public:
     }
     if (target) {
       // send back upstream
-      send<int>(*target, &s::Counter::from_sub_process, our_value);
+      send<int>(makeSendAddress(*target, &s::Counter::from_sub_process),
+                our_value);
     }
   }
 };

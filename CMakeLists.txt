@@ -53,7 +53,7 @@ foreach(EXAMPLE ${EXAMPLES})
 endforeach(EXAMPLE)
 
 find_package(gtest)
-if (gtest_FOUND)
+if (${GTEST_FOUND})
   include_directories(${GTEST_INCLUDE_DIR})
   # test is only for the core libs (for now)
   file(GLOB test_files "tests/*.cpp"  "tests/*.h")

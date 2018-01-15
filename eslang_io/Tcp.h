@@ -83,7 +83,11 @@ struct BufferCollection {
 
 class Tcp {
 public:
-  struct ListenerOptions {
+  struct SocketOptions {
+    bool throttled = true;
+  };
+
+  struct ListenerOptions : SocketOptions {
     explicit ListenerOptions(uint32_t port) : port(port) {}
     uint32_t port;
     struct SslFiles {
@@ -114,8 +118,13 @@ public:
   static void initRecvSocket(Process* sender, Socket socket,
                              TSendAddress<ReceiveData> new_socket_address);
 
-  static void send(Process* sender, Socket socket, Buffer data);
-  static void sendMany(Process* sender, Socket socket, BufferCollection buffs);
+  static MethodTask<> sendThrottled(Process* sender, Socket socket,
+                                    Buffer data);
+  static MethodTask<> sendManyThrottled(Process* sender, Socket socket,
+                                        BufferCollection buffs);
+  static WaitingMaybe send(Process* sender, Socket socket, Buffer data);
+  static WaitingMaybe sendMany(Process* sender, Socket socket,
+                               BufferCollection buffs);
 };
 
 struct StreamBatcher : NonMovable {

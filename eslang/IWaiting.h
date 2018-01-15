@@ -16,10 +16,6 @@ template <class T> struct MethodTaskPromiseWithReturn;
 
 struct IWaiting {
   virtual bool isReadyForResume() const { return false; }
-  virtual std::vector<SendAddress> const* wakeOnSender() const {
-    return nullptr;
-  }
-
   virtual std::optional<std::chrono::milliseconds> sleepFor() const {
     return {};
   }

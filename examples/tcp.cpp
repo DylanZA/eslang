@@ -1,6 +1,5 @@
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
-#include <boost/log/sinks/text_file_backend.hpp>
 #include <eslang/Context.h>
 #include <eslang/Logging.h>
 #include <eslang_io/Tcp.h>
@@ -20,7 +19,7 @@ public:
     Tcp::initRecvSocket(this, s_, recv.address());
     while (true) {
       auto r = co_await Process::recv(recv);
-      Tcp::send(this, s_, std::move(r.data));
+      co_await Tcp::sendThrottled(this, s_, std::move(r.data));
     }
   }
 };
@@ -47,6 +46,9 @@ public:
 }
 
 int main(int argc, char** argv) {
+  boost::log::core::get()->set_filter(boost::log::trivial::severity >=
+                                      boost::log::trivial::info);
+
   s::Context c;
   c.spawn<s::TcpEchoServer>(25123);
   c.run();

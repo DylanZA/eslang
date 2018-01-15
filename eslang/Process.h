@@ -57,11 +57,19 @@ public:
   template <class T, class... Args>
   Pid spawnLinkNotify(TSendAddress<Pid> send_address, Args... args);
 
+  template <class T, class Y>
+  TSendAddress<T> makeSendAddress(Pid pid, Slot<T> Y::*slot);
+
+  template <class T>
+  MethodTask<void> sendThrottled(TSendAddress<T> p, Message<T> msg);
+
+  template <class T, class... Args>
+  MethodTask<void> sendThrottled(TSendAddress<T> p, Args&&... params) {
+    return sendThrottled(p, Message<T>(std::forward<Args>(params)...));
+  }
+
   template <class T, class... Args>
   WaitingMaybe send(TSendAddress<T> p, Args&&... params);
-
-  template <class T, class Y, class... Args>
-  WaitingMaybe send(Pid pid, Slot<T> Y::*slot, Args&&... params);
 
   Context* c() { return c_; }
 
@@ -96,6 +104,7 @@ protected:
   Pid pid_;
 
 private:
+  template <class T> friend class Slot;
   std::vector<Pid> killOnDie_;
   std::vector<TSendAddress<Pid>> notifyOnDie_;
 };

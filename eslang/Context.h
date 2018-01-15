@@ -21,6 +21,18 @@ public:
 
   bool waitOnQueue() const { return queue_.size() > 10; }
 
+  template <class T> EslangPromise* canQueue(TSendAddress<T> t) const {
+    auto it = findProc(t.pid());
+    if (it == processes_.end()) {
+      return nullptr;
+    }
+    auto* q = static_cast<TSlotBase<T>*>(t.slot())->queue();
+    if (q->shouldThrottle()) {
+      return q->throttlePromise();
+    }
+    return nullptr;
+  }
+
   template <class T, class Y>
   TSendAddress<T> makeSendAddress(Pid pid, Slot<T> Y::*slot) {
     auto it = findProc(pid);
@@ -142,14 +154,28 @@ Pid Process::spawnLinkNotify(TSendAddress<Pid> send_address, Args... args) {
   return new_pid;
 }
 
+template <class T>
+MethodTask<void> Process::sendThrottled(TSendAddress<T> p, Message<T> message) {
+  if (c_->waitOnQueue()) {
+    co_await WaitingYield();
+  }
+  auto* promise = c_->canQueue(p);
+  while (promise) {
+    co_await WaitingFuture(promise);
+    promise = c_->canQueue(p);
+  }
+  c_->queueSend(p, std::move(message));
+  co_return;
+}
+
 template <class T, class... Args>
 WaitingMaybe Process::send(TSendAddress<T> p, Args&&... params) {
   c_->queueSend(p, Message<T>(std::forward<Args>(params)...));
   return WaitingMaybe(c_->waitOnQueue());
 }
 
-template <class T, class Y, class... Args>
-WaitingMaybe Process::send(Pid pid, Slot<T> Y::*slot, Args&&... params) {
-  return send(c_->makeSendAddress(pid, slot), std::forward<Args>(params)...);
+template <class T, class Y>
+TSendAddress<T> Process::makeSendAddress(Pid pid, Slot<T> Y::*slot) {
+  return c_->makeSendAddress(pid, slot);
 }
 }

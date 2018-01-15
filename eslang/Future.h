@@ -73,10 +73,12 @@ public:
   void process() {
     if (exception_) {
       exception_->maybeThrowException();
+      exception_.reset();
     }
     if (set_) {
       exec_.reset();
     }
+    set_ = false;
   }
 
   template <class T> void setException(T const& t) {
@@ -90,6 +92,9 @@ public:
 
   void setContinuation(boost::asio::io_service& io_service, Function func) {
     exec_ = std::make_pair(&io_service, std::move(func));
+    if (set_) {
+      set();
+    }
   }
 
 private:

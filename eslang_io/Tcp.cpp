@@ -100,10 +100,13 @@ template <class Traits> struct TSocketProcess : public Traits {
   std::optional<TSendAddress<Tcp::ReceiveData>> toSend;
 
   TSendAddress<Tcp::Socket> onReady;
+  Tcp::SocketOptions options_;
 
   TSocketProcess(ProcessArgs i, typename Traits::Socket socket,
-                 TSendAddress<Tcp::Socket> onReady)
-      : Traits(std::move(i), std::move(socket)), onReady(std::move(onReady)) {
+                 TSendAddress<Tcp::Socket> onReady,
+                 Tcp::SocketOptions const& options)
+      : Traits(std::move(i), std::move(socket)), onReady(std::move(onReady)),
+        options_(options) {
     ESLOG(LL::TRACE, "Socket ", this->toId(), " created");
   }
 
@@ -132,6 +135,7 @@ template <class Traits> struct TSocketProcess : public Traits {
   }
 
   char readBuff[16000];
+  std::optional<Tcp::ReceiveData> nextRead;
   void asyncRead() {
     this->socket().async_read_some(
         buffer(readBuff, sizeof(readBuff)),
@@ -150,11 +154,18 @@ template <class Traits> struct TSocketProcess : public Traits {
             return;
           }
           if (bytes > 0) {
-            this->send(*toSend,
-                       Tcp::ReceiveData(this->pid(),
-                                        Buffer::makeCopy(&readBuff, bytes)));
+            Tcp::ReceiveData rd(this->pid(),
+                                Buffer::makeCopy(&readBuff, bytes));
+            if (options_.throttled) {
+              nextRead = std::move(rd);
+              p_.setIfUnset();
+            } else {
+              this->send(*toSend, std::move(rd));
+              asyncRead();
+            }
+          } else {
+            asyncRead();
           }
-          asyncRead();
         });
   }
 
@@ -170,10 +181,10 @@ template <class Traits> struct TSocketProcess : public Traits {
                   }
                   isWriting = false;
                   if (ec) {
-                    ESLOG(LL::INFO, "Write error ", ec.message());
+                    ESLOG(LL::TRACE, "Write error ", ec.message());
                     setError(ec);
                   } else {
-                    ESLOG(LL::INFO, "Wrote ", bytes_transferred);
+                    ESLOG(LL::TRACE, "Wrote ", bytes_transferred);
                     setValue();
                   }
                 });
@@ -189,6 +200,11 @@ template <class Traits> struct TSocketProcess : public Traits {
     toSend = co_await this->recv(this->init);
     asyncRead();
     while (!eof_) {
+      if (nextRead) {
+        co_await this->sendThrottled(*toSend, std::move(*nextRead));
+        nextRead.reset();
+        asyncRead();
+      }
       if (isWriting) {
         // don't get a message to write until we are done with writing the last
         // one
@@ -237,32 +253,32 @@ struct ListenerProcess : public Process {
 
   ip::tcp::socket next{nextSocket()};
   void asyncAccept(ip::tcp::acceptor& socket) {
-    socket.async_accept(next, [this,
-                               &socket](const boost::system::error_code& ec) {
-      if (ec == error::operation_aborted) {
-        return;
-      }
-      if (ec) {
-        setException(ec);
-      } else {
-        // linking so it never gets lost. maybe should rethink that.
-        ip::tcp::no_delay option(true);
-        next.set_option(option);
+    socket.async_accept(
+        next, [this, &socket](const boost::system::error_code& ec) {
+          if (ec == error::operation_aborted) {
+            return;
+          }
+          if (ec) {
+            setException(ec);
+          } else {
+            // linking so it never gets lost. maybe should rethink that.
+            ip::tcp::no_delay option(true);
+            next.set_option(option);
 
-        if (sslContext) {
-          auto ssl = std::make_unique<ssl::stream<ip::tcp::socket>>(
-              c_->ioService(), *sslContext);
-          ssl->lowest_layer() = std::move(next);
-          addKillOnDie(spawn<TSocketProcess<SslSocketTraits>>(std::move(ssl),
-                                                              newSocket));
-        } else {
-          addKillOnDie(spawn<TSocketProcess<PlainSocketTraits>>(std::move(next),
-                                                                newSocket));
-        }
-        next = nextSocket();
-        asyncAccept(socket);
-      }
-    });
+            if (sslContext) {
+              auto ssl = std::make_unique<ssl::stream<ip::tcp::socket>>(
+                  c_->ioService(), *sslContext);
+              ssl->lowest_layer() = std::move(next);
+              addKillOnDie(spawn<TSocketProcess<SslSocketTraits>>(
+                  std::move(ssl), newSocket, options));
+            } else {
+              addKillOnDie(spawn<TSocketProcess<PlainSocketTraits>>(
+                  std::move(next), newSocket, options));
+            }
+            next = nextSocket();
+            asyncAccept(socket);
+          }
+        });
   }
   ProcessTask run() {
     ip::tcp::acceptor socket(c_->ioService());
@@ -286,14 +302,33 @@ Pid Tcp::makeListener(Process* parent, TSendAddress<Socket> new_socket_address,
 void Tcp::initRecvSocket(Process* sender, Socket socket,
                          TSendAddress<ReceiveData> new_socket_address) {
   ESLOG(LL::DEBUG, "Init ", socket.pid);
-  sender->send(socket.pid, &SocketProcess::init, std::move(new_socket_address));
+  sender->send(sender->makeSendAddress(socket.pid, &SocketProcess::init),
+               std::move(new_socket_address));
 }
 
-void Tcp::send(Process* sender, Socket socket, Buffer data) {
-  sender->send(socket.pid, &SocketProcess::send_data, std::move(data));
+MethodTask<> Tcp::sendThrottled(Process* sender, Socket socket, Buffer data) {
+  return sender->sendThrottled(
+      sender->makeSendAddress(socket.pid, &SocketProcess::send_data),
+      std::move(data));
 }
 
-void Tcp::sendMany(Process* sender, Socket socket, BufferCollection data) {
-  sender->send(socket.pid, &SocketProcess::send_many_data, std::move(data));
+MethodTask<> Tcp::sendManyThrottled(Process* sender, Socket socket,
+                                    BufferCollection buffs) {
+  return sender->sendThrottled(
+      sender->makeSendAddress(socket.pid, &SocketProcess::send_many_data),
+      std::move(buffs));
+}
+
+WaitingMaybe Tcp::send(Process* sender, Socket socket, Buffer data) {
+  return sender->send(
+      sender->makeSendAddress(socket.pid, &SocketProcess::send_data),
+      std::move(data));
+}
+
+WaitingMaybe Tcp::sendMany(Process* sender, Socket socket,
+                           BufferCollection data) {
+  return sender->send(
+      sender->makeSendAddress(socket.pid, &SocketProcess::send_many_data),
+      std::move(data));
 }
 }

@@ -36,6 +36,11 @@ public:
     }
   }
 
+  static constexpr size_t kThrottle = 10;
+  bool shouldThrottle() const { return size() >= kThrottle; }
+
+  EslangPromise* throttlePromise() { return &p_; }
+
   Message<T> pop() {
     Message<T> ret = std::move(*stackStorage);
     if (others.empty()) {
@@ -44,13 +49,19 @@ public:
       stackStorage = std::move(others.front());
       others.pop_front();
     }
+    if (size() == kThrottle - 1) {
+      p_.setIfUnset();
+    }
     return ret;
   }
+
+  ~MessageQueue() { p_.setIfUnset(); }
 
   // a guess that optimising for single queue length is a good idea.
   // maybe terrible in practive. who can say!
   std::optional<Message<T>> stackStorage;
   std::deque<Message<T>> others;
+  EslangPromise p_;
 };
 
 class SlotBase {

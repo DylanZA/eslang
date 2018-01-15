@@ -63,7 +63,7 @@ struct PromiseBase {
   PromiseBase* subCoroutineChild = nullptr;
   ProcessPromise* processPromise = nullptr;
 
-  void unhandled_exception() { std::terminate(); }
+  void unhandled_exception() { throw; }
   auto initial_suspend() { return std::experimental::suspend_always{}; }
   auto final_suspend() { return std::experimental::suspend_always{}; }
   virtual std::experimental::coroutine_handle<> getHandle() {
