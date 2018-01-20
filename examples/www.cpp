@@ -15,7 +15,7 @@ class ExampleWwwHandler : public Www::Server::IHandler {
                                         Www::Request const& req) override {
     Www::Response resp{};
     ESLOG(LL::INFO, "Received ", req.toString());
-    resp.message.set(boost::beast::http::field::content_type, "text/plain");
+    resp.message.set(boost::beast::http::field::content_type, "text/html");
     if (req.message.target().find("favicon") != std::string::npos) {
       resp.message.result(boost::beast::http::status::not_found);
       resp.message.body() = "404 not found";
@@ -30,8 +30,14 @@ class ExampleWwwHandler : public Www::Server::IHandler {
     ESLOG(LL::INFO, "Sleep ", sleep, "s done");
     r.result(boost::beast::http::status::ok);
     r.body() =
-        concatString("Hello, world! from ", std::string(req.message.target()),
-                     " slept ", sleep);
+      concatString(
+"<html><head><title>ESLANG</title></head>"
+"<body>Powered by <a href=\"https://github.com/dylanza/eslang\">Eslang</a><br>"
+"Hello, world! from "
+		   , std::string(req.message.target()),
+		   " slept ", sleep,
+		   "</body></html>"
+		   );
     if (req.message.target().find("chunk") != std::string::npos) {
       r.chunked(true);
     } else {

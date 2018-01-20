@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.7)
+cmake_minimum_required (VERSION 3.5.1)
 project (Eslang)
 SET(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
